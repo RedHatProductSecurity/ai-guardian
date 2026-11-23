@@ -92,6 +92,7 @@ class PatternServerWarningsTest(TestCase):
         """Test that warn_on_failure can be explicitly set to True"""
         config = {
             "url": "https://pattern-server.example.com",
+            "allow_untrusted_host": True,
             "warn_on_failure": True,
             "auth": {"token_env": "TEST_TOKEN"},
         }
@@ -241,7 +242,10 @@ class PatternServerWarningsTest(TestCase):
     ):
         """Test that operation shows WARNING when pattern server fails AND no scanner engines available"""
         # Setup: Pattern server configured without warn_on_failure field
-        pattern_config = {"url": "https://pattern-server.example.com"}
+        pattern_config = {
+            "url": "https://pattern-server.example.com",
+            "allow_untrusted_host": True,
+        }
         mock_pattern_config.return_value = pattern_config
 
         # Mock client that fails to get patterns (returns None)
@@ -297,6 +301,7 @@ class PatternServerWarningsTest(TestCase):
         # Setup: Pattern server with warn_on_failure=True
         config = {
             "url": "https://pattern-server.example.com",
+            "allow_untrusted_host": True,
             "warn_on_failure": True,
             "auth": {"token_env": "TEST_TOKEN"},
         }
@@ -335,6 +340,7 @@ class PatternServerWarningsTest(TestCase):
         # Setup: Pattern server with warn_on_failure=True
         config = {
             "url": "https://pattern-server.example.com",
+            "allow_untrusted_host": True,
             "warn_on_failure": True,
             "auth": {"token_env": "TEST_TOKEN"},
         }
@@ -373,6 +379,7 @@ class PatternServerWarningsTest(TestCase):
         # Setup: Pattern server with warn_on_failure=True
         config = {
             "url": "https://pattern-server.example.com",
+            "allow_untrusted_host": True,
             "warn_on_failure": True,
             "auth": {"token_env": "TEST_TOKEN"},
         }
@@ -407,6 +414,7 @@ class PatternServerWarningsTest(TestCase):
         # Setup: Pattern server with warn_on_failure=True
         config = {
             "url": "https://pattern-server.example.com",
+            "allow_untrusted_host": True,
             "warn_on_failure": True,
             "auth": {"token_env": "TEST_TOKEN"},
         }
@@ -571,7 +579,10 @@ class PatternServerWarningsTest(TestCase):
     ):
         """Test that engines are tried in order with warnings logged for unavailable ones"""
         # Setup: Pattern server unavailable
-        pattern_config = {"url": "https://pattern-server.example.com"}
+        pattern_config = {
+            "url": "https://pattern-server.example.com",
+            "allow_untrusted_host": True,
+        }
         mock_pattern_config.return_value = pattern_config
 
         mock_client = MagicMock()
@@ -738,6 +749,7 @@ class PatternServerWarningsTest(TestCase):
         # Setup: Pattern server pointing to private endpoint
         config = {
             "url": "https://private-patterns.example.com",
+            "allow_untrusted_host": True,
             "patterns_endpoint": "/api/v1/patterns",
             "auth": {"token_env": "PRIVATE_PATTERN_TOKEN"},
         }
@@ -785,6 +797,7 @@ class PatternServerWarningsTest(TestCase):
         # Setup: Pattern server with token configured
         config = {
             "url": "https://private-patterns.example.com",
+            "allow_untrusted_host": True,
             "patterns_endpoint": "/api/v1/patterns",
             "auth": {"token_env": "PRIVATE_PATTERN_TOKEN"},
         }

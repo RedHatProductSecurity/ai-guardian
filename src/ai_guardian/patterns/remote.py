@@ -82,6 +82,7 @@ class RemoteFetcher:
         refresh_interval_hours: Optional[int] = None,
         expire_after_hours: Optional[int] = None,
         headers: Optional[Dict] = None,
+        expected_sha256: Optional[str] = None,
     ) -> Optional[Dict]:
         """
         Fetch remote configuration with caching.
@@ -140,7 +141,7 @@ class RemoteFetcher:
             logger.info(
                 f"Cache stale for {url} (age: {cache_age_hours:.1f}h), attempting refresh..."
             )
-            fresh_config = self._fetch_from_url(url, headers)
+            fresh_config = self._fetch_from_url(url, headers, expected_sha256)
 
             if fresh_config is not None:
                 # Refresh succeeded
@@ -165,7 +166,7 @@ class RemoteFetcher:
 
         # No cache - fetch from URL
         logger.info(f"No cache for {url}, fetching...")
-        config = self._fetch_from_url(url, headers)
+        config = self._fetch_from_url(url, headers, expected_sha256)
 
         if config is not None:
             self._save_to_cache(url, config)
@@ -256,7 +257,10 @@ class RemoteFetcher:
             return None
 
     def _fetch_from_url(
-        self, url: str, custom_headers: Optional[Dict] = None
+        self,
+        url: str,
+        custom_headers: Optional[Dict] = None,
+        expected_sha256: Optional[str] = None,
     ) -> Optional[Dict]:
         """
         Fetch configuration from HTTP/HTTPS URL or local file path.
@@ -333,6 +337,11 @@ class RemoteFetcher:
 
             # Parse content (try JSON first, then TOML for backward compatibility)
             content = response.text
+            if expected_sha256:
+                actual_sha256 = hashlib.sha256(response.content).hexdigest()
+                if actual_sha256 != expected_sha256.strip().lower():
+                    logger.error("Remote configuration SHA-256 verification failed")
+                    return None
             config = None
 
             # Try JSON first (preferred format)

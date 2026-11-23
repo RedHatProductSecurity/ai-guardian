@@ -563,12 +563,10 @@ class TestCheckPatternServer:
 
         doctor = Doctor()
         result = doctor.check_pattern_server()
-        assert result.status == CheckStatus.PASS
-        assert "Configured" in result.message
-        assert result.detail == (
-            "secret_scanning: URL=https://example.com/patterns; "
-            "patterns_endpoint=/patterns/gitleaks/v1"
-        )
+        assert result.status == CheckStatus.WARN
+        assert "integrity warnings" in result.message
+        assert "host=example.com" in result.detail
+        assert "verification=unverified" in result.detail
 
     def test_lists_per_engine_servers_one_per_line(self, _isolate_config_dir):
         config_path = _isolate_config_dir / "ai-guardian.json"
@@ -599,13 +597,11 @@ class TestCheckPatternServer:
 
         result = Doctor().check_pattern_server()
 
-        assert result.status == CheckStatus.PASS
-        assert result.detail.splitlines() == [
-            "gitleaks: URL=https://secrets.example/patterns; "
-            "patterns_endpoint=/patterns/gitleaks/v1",
-            "leaktk: URL=https://community.example/patterns; "
-            "patterns_endpoint=/patterns/gitleaks/8.27.0",
-        ]
+        assert result.status == CheckStatus.WARN
+        assert len(result.detail.splitlines()) == 2
+        assert all(
+            "verification=unverified" in line for line in result.detail.splitlines()
+        )
 
 
 class TestCheckHooks:

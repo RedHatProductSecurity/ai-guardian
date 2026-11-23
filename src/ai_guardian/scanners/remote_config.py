@@ -58,6 +58,7 @@ def fetch_remote_engine_config(
             refresh_interval_hours=remote_config.get("refresh_interval_hours", 12),
             expire_after_hours=remote_config.get("expire_after_hours", 168),
             headers=headers or None,
+            expected_sha256=remote_config.get("sha256"),
         )
 
         return result
