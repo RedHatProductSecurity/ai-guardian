@@ -30,6 +30,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   maintainer identity and canonical GitHub origin at release mutation points;
   standalone announcements now apply the same checks. Agent skill copies cannot
   authorize production tags, pushes, publication, or Discussions.
+- **Local support bundle default (#2845):** New and unset configurations now
+  create a reviewed local ZIP under `~/support-bundles` by default. Explicit
+  local, S3, GCS, email, and GitHub Discussions destinations remain unchanged;
+  local ZIP creation clearly states that nothing is uploaded or sent.
 - **Pattern server integrity:** Record bundle origin and SHA-256 metadata, reject
   mismatched pinned hashes, and warn in Doctor for unpinned or non-allowlisted
   pattern hosts. Official LeakTK bundles use the `raw.githubusercontent.com/leaktk`
