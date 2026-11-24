@@ -15,6 +15,7 @@ from ai_guardian.web.config_helpers import (
     get_web_config_notice,
     get_effective_config_scope_notice,
     get_web_config_state,
+    get_current_daemon_version,
     set_daemon_service,
     set_current_daemon_name,
     set_current_project_dir,
@@ -271,6 +272,9 @@ class _FakeService:
     def refresh_targets(self):
         pass
 
+    def get_daemon_status(self, target):
+        return {"version": "2.4.1"}
+
 
 class TestIsRemoteTarget:
     """Tests for _is_remote_target helper."""
@@ -289,6 +293,28 @@ class TestIsRemoteTarget:
 
     def test_manual_target(self):
         assert _is_remote_target(_FakeTarget(runtime="manual")) is True
+
+
+class TestCurrentDaemonVersion:
+    def setup_method(self):
+        self._svc = _FakeService()
+        set_daemon_service(self._svc)
+        set_current_daemon_name("test-daemon")
+
+    def teardown_method(self):
+        set_daemon_service(None)
+        set_current_daemon_name("")
+
+    def test_returns_version_from_daemon_status(self):
+        assert get_current_daemon_version() == "2.4.1"
+
+    def test_returns_none_when_status_has_no_version(self):
+        self._svc.get_daemon_status = MagicMock(return_value={})
+        assert get_current_daemon_version() is None
+
+    def test_returns_none_when_daemon_is_unavailable(self):
+        self._svc.get_daemon_status = MagicMock(return_value=None)
+        assert get_current_daemon_version() is None
 
 
 class TestRemoteConfigRouting:
