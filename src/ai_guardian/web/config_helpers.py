@@ -86,6 +86,21 @@ def _get_current_target():
     return target
 
 
+def get_current_daemon_version() -> Optional[str]:
+    """Return the selected daemon version from its live status response."""
+    target = _get_current_target()
+    if target is None or _daemon_service is None:
+        return None
+    try:
+        status = _daemon_service.get_daemon_status(target)
+    except Exception:
+        return None
+    if not isinstance(status, dict):
+        return None
+    version = status.get("version")
+    return version if isinstance(version, str) and version.strip() else None
+
+
 def _is_remote_target(target) -> bool:
     """Return True if the target exists and is NOT local."""
     return target is not None and target.runtime != "local"

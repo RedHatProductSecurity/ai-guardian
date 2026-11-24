@@ -203,6 +203,7 @@ def create_header(daemon_name: str = "", drawer=None):
         set_current_project_dir("")
 
     config_state_label = None
+    daemon_version_label = None
     with ui.header().classes("items-center justify-between bg-blue-grey-10"):
         with ui.row().classes("items-center gap-4"):
             if drawer is not None:
@@ -213,8 +214,12 @@ def create_header(daemon_name: str = "", drawer=None):
             ui.link("AI Guardian", "/").classes(
                 "text-xl font-bold text-white no-underline"
             )
-            ui.label(f"v{__version__}").classes("text-grey-6 text-xs")
+            ui.label(f"Console v{__version__}").classes("text-grey-6 text-xs")
             if daemon_name:
+                ui.label("|").classes("text-grey-6")
+                daemon_version_label = ui.label("Daemon vunknown").classes(
+                    "text-grey-6 text-xs"
+                )
                 ui.label("|").classes("text-grey-6")
                 ui.label(daemon_name).classes("text-white font-bold")
                 config_state_label = ui.label("").classes("text-orange-3 text-xs")
@@ -227,7 +232,21 @@ def create_header(daemon_name: str = "", drawer=None):
             else:
                 ui.link("Select Daemon", "/").classes("text-white no-underline")
 
-    if config_state_label is not None:
+    if config_state_label is not None and daemon_version_label is not None:
+
+        async def _refresh_daemon_version():
+            try:
+                from nicegui import run
+
+                from ai_guardian.web.config_helpers import get_current_daemon_version
+
+                version = await run.io_bound(get_current_daemon_version)
+                if version:
+                    daemon_version_label.text = f"Daemon v{version}"
+            except Exception:
+                pass  # intentionally silent — header metadata is best-effort
+
+        ui.timer(0.1, _refresh_daemon_version, once=True)
 
         async def _refresh_config_state():
             try:
