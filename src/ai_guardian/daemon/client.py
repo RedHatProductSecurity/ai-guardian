@@ -43,6 +43,7 @@ from ai_guardian.daemon.protocol import (
 logger = logging.getLogger(__name__)
 
 DAEMON_START_TIMEOUT_SECONDS = 10.0
+DAEMON_START_RACE_WAIT_SECONDS = 2.0
 
 
 def _remote_url_configured() -> bool:
@@ -97,7 +98,7 @@ def _get_remote_url() -> Optional[Tuple[str, str, int, Optional[str]]]:
     return (parsed.scheme, host, port, auth_token)
 
 
-def _send_remote(path, data, timeout=5.0):
+def _send_remote(path, data, timeout=5.0, *, raise_errors=False):
     """Send a request to the remote daemon via HTTP REST API.
 
     Args:
@@ -130,9 +131,13 @@ def _send_remote(path, data, timeout=5.0):
         ) as resp:
             return json.loads(resp.read().decode("utf-8"))
     except DaemonConnectionError as exc:
+        if raise_errors:
+            raise
         logger.warning("%s", exc)
         return None
     except Exception:
+        if raise_errors:
+            raise
         logger.debug("Remote daemon request failed")
         return None
 
@@ -220,7 +225,7 @@ def is_daemon_running():
         return False
 
 
-def send_hook_request(hook_data, timeout=2.0):
+def send_hook_request(hook_data, timeout=2.0, *, raise_errors=False):
     """Send hook data to daemon and get response.
 
     When AI_GUARDIAN_DAEMON_URL is set, forwards via HTTP POST to /api/hook.
@@ -238,6 +243,8 @@ def send_hook_request(hook_data, timeout=2.0):
         data["_ai_guardian_run_id"] = run_id
 
     if _remote_url_configured():
+        if raise_errors:
+            return _send_remote("/api/hook", data, timeout=timeout, raise_errors=True)
         return _send_remote("/api/hook", data, timeout=timeout)
 
     try:
@@ -257,8 +264,12 @@ def send_hook_request(hook_data, timeout=2.0):
             sock.close()
 
     except (socket.error, socket.timeout, ConnectionError, ValueError):
+        if raise_errors:
+            raise
         return None
     except Exception as e:
+        if raise_errors:
+            raise
         logger.debug(f"Daemon request failed: {e}")
         return None
 
@@ -639,64 +650,103 @@ def start_daemon_background(rest_host=None, rest_port=None):
             logger.debug("Skipping auto-start: stop-requested marker present")
             return False
 
-        if is_daemon_running():
-            logger.warning("Daemon already running, refusing to start duplicate")
+        startup_gate = get_state_dir() / "daemon.starting"
+        try:
+            startup_gate.parent.mkdir(parents=True, exist_ok=True)
+            descriptor = os.open(
+                startup_gate,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o600,
+            )
+            os.write(descriptor, str(os.getpid()).encode())
+            os.close(descriptor)
+            owns_startup_gate = True
+        except FileExistsError:
+            try:
+                owner = int(startup_gate.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                owner = None
+            if owner is None or not is_pid_alive(owner):
+                try:
+                    startup_gate.unlink()
+                except OSError:
+                    return False
+                return start_daemon_background(rest_host=rest_host, rest_port=rest_port)
+            # Another short-lived hook owns startup. Give its daemon a bounded
+            # chance to become ready instead of launching a competing process.
+            for _ in range(int(DAEMON_START_RACE_WAIT_SECONDS / 0.1)):
+                time.sleep(0.1)
+                if is_daemon_running():
+                    return True
+            return False
+        except OSError:
             return False
 
-        # Find the ai-guardian command
-        cmd = _find_executable()
-        daemon_cmd = cmd + ["daemon", "start"]
-        if rest_host is not None:
-            daemon_cmd.extend(["--host", str(rest_host)])
-        if rest_port is not None:
-            daemon_cmd.extend(["--port", str(rest_port)])
-        logger.info(f"Starting daemon: {' '.join(daemon_cmd)}")
+        try:
+            if is_daemon_running():
+                logger.warning("Daemon already running, refusing to start duplicate")
+                return False
 
-        # Start detached daemon process
-        if platform.system() == "Darwin":
-            # On macOS, use osascript to launch with GUI session access
-            # so the system tray icon can attach to the menu bar
-            cmd_str = " ".join(shlex.quote(arg) for arg in daemon_cmd)
-            script = f'do shell script "{cmd_str} &> /dev/null &"'
-            subprocess.Popen(
-                ["osascript", "-e", script],
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-        elif platform.system() == "Windows":
-            subprocess.Popen(
-                daemon_cmd,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                creationflags=(
-                    getattr(subprocess, "DETACHED_PROCESS", 0)
-                    | getattr(subprocess, "CREATE_NO_WINDOW", 0)
-                ),
-            )
-        else:
-            subprocess.Popen(
-                daemon_cmd,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True,
-            )
+            # Find the ai-guardian command
+            cmd = _find_executable()
+            daemon_cmd = cmd + ["daemon", "start"]
+            if rest_host is not None:
+                daemon_cmd.extend(["--host", str(rest_host)])
+            if rest_port is not None:
+                daemon_cmd.extend(["--port", str(rest_port)])
+            logger.info(f"Starting daemon: {' '.join(daemon_cmd)}")
 
-        # Wait for daemon to become ready
-        sock_path = get_socket_path()
-        for _ in range(int(DAEMON_START_TIMEOUT_SECONDS / 0.1)):
-            time.sleep(0.1)
-            if sock_path.exists() or _tcp_pid_has_port():
-                if is_daemon_running():
-                    logger.info("Daemon started in background")
-                    return True
+            # Start detached daemon process
+            if platform.system() == "Darwin":
+                # On macOS, use osascript to launch with GUI session access
+                # so the system tray icon can attach to the menu bar
+                cmd_str = " ".join(shlex.quote(arg) for arg in daemon_cmd)
+                script = f'do shell script "{cmd_str} &> /dev/null &"'
+                subprocess.Popen(
+                    ["osascript", "-e", script],
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            elif platform.system() == "Windows":
+                subprocess.Popen(
+                    daemon_cmd,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    creationflags=(
+                        getattr(subprocess, "DETACHED_PROCESS", 0)
+                        | getattr(subprocess, "CREATE_NO_WINDOW", 0)
+                    ),
+                )
+            else:
+                subprocess.Popen(
+                    daemon_cmd,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
 
-        logger.warning(
-            "Daemon start timed out after %.0fs", DAEMON_START_TIMEOUT_SECONDS
-        )
-        return False
+            # Wait for daemon to become ready
+            sock_path = get_socket_path()
+            for _ in range(int(DAEMON_START_TIMEOUT_SECONDS / 0.1)):
+                time.sleep(0.1)
+                if sock_path.exists() or _tcp_pid_has_port():
+                    if is_daemon_running():
+                        logger.info("Daemon started in background")
+                        return True
+
+            logger.warning(
+                "Daemon start timed out after %.0fs", DAEMON_START_TIMEOUT_SECONDS
+            )
+            return False
+        finally:
+            if owns_startup_gate:
+                try:
+                    startup_gate.unlink()
+                except OSError:
+                    pass  # intentionally silent — startup gate cleanup
 
     except Exception as e:
         logger.debug(f"Failed to start daemon: {e}")

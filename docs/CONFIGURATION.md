@@ -144,7 +144,11 @@ authentication, public-visibility warnings, and content/attachment limits.
 The existing top-level `on_scan_error` setting controls both scanner failures
 and failures of the hook process itself. This includes daemon startup or
 response failures, direct fallback exceptions, package import or syntax errors
-in an editable checkout, and malformed hook responses.
+in an editable checkout, and malformed hook responses. Hook invocations always
+retain a direct in-process fallback when the daemon is stopped, unavailable,
+times out, or returns an invalid response. A configured remote daemon is never
+started locally. The hook logs a structured, privacy-safe fallback reason for
+diagnostics; the reason does not change the configured allow/block policy.
 
 ```json
 {

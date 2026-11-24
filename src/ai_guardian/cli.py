@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 
 from ai_guardian_hook_runtime import (
+    attempt_daemon_hook_request,
     build_failure_response,
     ensure_hook_response,
     get_on_scan_error_action,
@@ -2884,6 +2885,7 @@ def main():
 
     try:
         from ai_guardian.daemon.client import (
+            _remote_url_configured,
             is_daemon_running,
             send_hook_request,
             start_daemon_background,
@@ -2912,28 +2914,34 @@ def main():
         if _cli_run_id:
             hook_data["_ai_guardian_run_id"] = _cli_run_id
 
-        running = is_daemon_running()
-        if not running and not _is_stop_requested():
-            logger.info("Daemon not running, starting...")
-            running = start_daemon_background()
-
-        if running:
-            logger.info("Daemon is running, forwarding hook request")
-            timeout = _get_client_timeout(config=_hook_config)
-            if _hook_config and _has_ask_action(_hook_config):
-                timeout = max(timeout, 310.0)
-            response = send_hook_request(hook_data, timeout=timeout)
-            if response is not None:
-                response = ensure_hook_response(
-                    hook_data,
-                    response,
-                    action=get_on_scan_error_action(_hook_config),
-                )
-                logger.info("Daemon processed hook request")
-            else:
-                logger.warning("Daemon returned no response, falling back to direct")
+        timeout = _get_client_timeout(config=_hook_config)
+        if _hook_config and _has_ask_action(_hook_config):
+            timeout = max(timeout, 310.0)
+        remote_configured = _remote_url_configured()
+        attempt = attempt_daemon_hook_request(
+            hook_data,
+            remote_configured=remote_configured,
+            stop_requested=_is_stop_requested(),
+            is_running=is_daemon_running,
+            start=start_daemon_background,
+            request=lambda data, timeout: send_hook_request(
+                data, timeout=timeout, raise_errors=True
+            ),
+            normalize=lambda data, daemon_response: ensure_hook_response(
+                data,
+                daemon_response,
+                action=get_on_scan_error_action(_hook_config),
+            ),
+            timeout=timeout,
+        )
+        response = attempt.response
+        if response is not None:
+            logger.info("Daemon processed hook request")
         else:
-            logger.info("Daemon unavailable, falling back to direct")
+            logger.warning(
+                "Daemon hook path fell back to direct processing",
+                extra={"hook_daemon_diagnostic": attempt.diagnostic.as_dict()},
+            )
     except Exception as e:
         logger.info(f"Daemon client error, falling back to direct: {e}")
         if stdin_consumed and not isinstance(hook_data, dict):

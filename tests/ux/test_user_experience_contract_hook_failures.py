@@ -1,8 +1,9 @@
 """UX contracts for hook startup and process failures (#2434)."""
 
 import json
+import logging
 from io import StringIO
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from ai_guardian_hook_runtime import main as runtime_main
 
@@ -77,3 +78,77 @@ def test_startup_failure_fail_closed_is_a_cursor_deny(capsys):
     assert exit_code == 0
     assert response["permission"] == "deny"
     assert "temporary source error" not in captured.out
+
+
+def test_remote_daemon_failure_uses_direct_hook_without_local_start(capsys, caplog):
+    """
+    USER EXPERIENCE: Remote daemon outage -> direct processing, no local launch.
+
+    Expected User Experience:
+    - A configured remote endpoint is never replaced with a local daemon.
+    - The hook still returns the direct processing result.
+    - Logs identify the remote outage without exposing endpoint or hook content.
+    """
+    from ai_guardian import cli
+
+    caplog.set_level(logging.WARNING, logger="ai_guardian.cli")
+    hook_data = {"_ide_type": "codex", "hook_event_name": "PostToolUse"}
+    direct = {"output": "{}", "exit_code": 0}
+    start = Mock(side_effect=AssertionError("remote hooks must not start locally"))
+    with (
+        patch.dict("os.environ", {"AI_GUARDIAN_DAEMON_URL": "https://daemon.test"}),
+        patch("ai_guardian.cli._load_config_file", return_value=({}, None)),
+        patch("ai_guardian.daemon.client.is_daemon_running", return_value=False),
+        patch("ai_guardian.daemon.client.start_daemon_background", start),
+        patch("ai_guardian.cli.process_hook_data", return_value=direct),
+        patch("sys.argv", ["ai-guardian"]),
+        patch("sys.stdin", StringIO(json.dumps(hook_data))),
+    ):
+        with patch.object(cli, "_is_stop_requested", return_value=False):
+            try:
+                cli.main()
+            except SystemExit as exc_info:
+                assert exc_info.code == 0
+
+    assert json.loads(capsys.readouterr().out) == {}
+    start.assert_not_called()
+    diagnostic = [
+        record.hook_daemon_diagnostic
+        for record in caplog.records
+        if hasattr(record, "hook_daemon_diagnostic")
+    ][-1]
+    assert diagnostic == {"reason": "remote_unavailable", "remote": True}
+
+
+def test_malformed_daemon_response_retries_direct_processing(capsys, caplog):
+    """USER EXPERIENCE: Invalid daemon response -> direct result and diagnosis."""
+    from ai_guardian import cli
+
+    caplog.set_level(logging.WARNING, logger="ai_guardian.cli")
+    hook_data = {"_ide_type": "codex", "hook_event_name": "PostToolUse"}
+    direct = {"output": "{}", "exit_code": 0}
+    with (
+        patch("ai_guardian.cli._load_config_file", return_value=({}, None)),
+        patch("ai_guardian.daemon.client.is_daemon_running", return_value=True),
+        patch(
+            "ai_guardian.daemon.client.send_hook_request",
+            return_value={"output": "not-json", "exit_code": 0},
+        ),
+        patch("ai_guardian.cli.process_hook_data", return_value=direct) as process,
+        patch("ai_guardian.cli._is_stop_requested", return_value=False),
+        patch("sys.argv", ["ai-guardian"]),
+        patch("sys.stdin", StringIO(json.dumps(hook_data))),
+    ):
+        try:
+            cli.main()
+        except SystemExit as exc_info:
+            assert exc_info.code == 0
+
+    assert json.loads(capsys.readouterr().out) == {}
+    process.assert_called_once_with(hook_data)
+    diagnostic = [
+        record.hook_daemon_diagnostic
+        for record in caplog.records
+        if hasattr(record, "hook_daemon_diagnostic")
+    ][-1]
+    assert diagnostic == {"reason": "malformed_response", "remote": False}

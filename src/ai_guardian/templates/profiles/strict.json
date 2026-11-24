@@ -292,7 +292,7 @@
     "by_type": {},
     "email": {"recipient": ""}
   },
-  "_comment_daemon": "Background daemon for faster hook processing. Auto-starts on any command, falls back to direct if unavailable.",
+  "_comment_daemon": "Background daemon for faster hook processing. Hooks use it when available, never start a configured remote daemon locally, and fall back to direct processing when startup, connectivity, timeout, or response validation fails.",
   "daemon": {
     "idle_timeout_minutes": 0,
     "client_timeout_seconds": 2.0,
@@ -312,7 +312,7 @@
       "ssh_alias_discovery": {"enabled": false, "alias_prefix": "ai-guardian-"}
     }
   },
-  "_comment_on_scan_error": "Global behavior when a scanner or hook process encounters an error. Strict profile: fail-closed (block on error).",
+  "_comment_on_scan_error": "Global behavior when a scanner or hook process encounters an error. Hooks retain direct processing for daemon outages, but this strict profile remains fail-closed when scanning or hook processing ultimately fails.",
   "on_scan_error": "block",
   "_comment_security_instructions": "Security rule injection into AI context via systemMessage. Injected on first UserPromptSubmit per session and re-injected after blocks. Customize with custom_rules or replace_defaults. Disable only for ai-guardian development. (v1.7.0 #580, v1.8.0 #584, v1.13.0 #1460)",
   "security_instructions": {
