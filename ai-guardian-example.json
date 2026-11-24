@@ -1149,7 +1149,7 @@
     }
   },
 
-  "_comment_daemon": "Background daemon for faster hook processing. Auto-starts on any command, falls back to direct if unavailable.",
+  "_comment_daemon": "Background daemon for faster hook processing. Hooks use it when available, never start a configured remote daemon locally, and fall back to direct processing when startup, connectivity, timeout, or response validation fails.",
   "_comment_daemon_tray": "System tray icon shows daemon status. Disable on headless servers.",
   "_comment_daemon_rest_port": "REST API port for multi-daemon tray communication. Default 63152. Set 0 for OS-assigned. Container daemons should use a fixed port.",
   "_comment_daemon_discovery": "Multi-daemon discovery: finds daemons across local, Podman/Docker containers, Kubernetes pods, and manual targets (tray-targets.json).",
@@ -1197,7 +1197,7 @@
     }
   },
 
-  "_comment_on_scan_error": "Global behavior when a scanner or hook process encounters an error (Issues #461 and #2434)",
+  "_comment_on_scan_error": "Global behavior when a scanner or hook process encounters an error. Hook invocations retain direct processing when the daemon is unavailable (Issues #461 and #2434)",
   "_comment_on_scan_error2": "'allow' (default): log warning, allow operation when scanning or hook startup/processing fails (fail-open, for developer productivity)",
   "_comment_on_scan_error3": "'block': block operation when scanning or hook startup/processing fails (fail-closed, for strict compliance)",
   "on_scan_error": "allow",

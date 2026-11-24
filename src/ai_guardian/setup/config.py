@@ -484,7 +484,7 @@ def _get_default_config_template(permissive: bool = False) -> Dict:
             "by_type": {},
             "email": {"recipient": ""},
         },
-        "_comment_daemon": "Background daemon for faster hook processing. Auto-starts on any command, falls back to direct if unavailable.",
+        "_comment_daemon": "Background daemon for faster hook processing. Hooks use it when available, never start a configured remote daemon locally, and fall back to direct processing when startup, connectivity, timeout, or response validation fails.",
         "daemon": {
             "idle_timeout_minutes": 0,
             "client_timeout_seconds": 2.0,

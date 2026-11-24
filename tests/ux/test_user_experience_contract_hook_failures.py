@@ -1,6 +1,7 @@
 """UX contracts for hook startup and process failures (#2434)."""
 
 import json
+import logging
 from io import StringIO
 from unittest.mock import Mock, patch
 
@@ -90,6 +91,7 @@ def test_remote_daemon_failure_uses_direct_hook_without_local_start(capsys, capl
     """
     from ai_guardian import cli
 
+    caplog.set_level(logging.WARNING, logger="ai_guardian.cli")
     hook_data = {"_ide_type": "codex", "hook_event_name": "PostToolUse"}
     direct = {"output": "{}", "exit_code": 0}
     start = Mock(side_effect=AssertionError("remote hooks must not start locally"))
@@ -122,6 +124,7 @@ def test_malformed_daemon_response_retries_direct_processing(capsys, caplog):
     """USER EXPERIENCE: Invalid daemon response -> direct result and diagnosis."""
     from ai_guardian import cli
 
+    caplog.set_level(logging.WARNING, logger="ai_guardian.cli")
     hook_data = {"_ide_type": "codex", "hook_event_name": "PostToolUse"}
     direct = {"output": "{}", "exit_code": 0}
     with (
