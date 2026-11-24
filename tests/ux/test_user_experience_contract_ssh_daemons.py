@@ -118,7 +118,10 @@ def test_ssh_documentation_leads_with_prepared_vm_path_and_preserves_trust_steps
     assert "ssh -o BatchMode=yes guardian-vm true" in normalized_guide
     assert "SSH → Add daemon via SSH" in normalized_guide
     assert "Trust and add daemon" in normalized_guide
-    assert "Check to confirm this SSH destination and daemon certificate identity" in normalized_guide
+    assert (
+        "Check to confirm this SSH destination and daemon certificate identity"
+        in normalized_guide
+    )
     assert "bootstrap Web Console tunnel" in normalized_guide
     assert "tray-managed REST tunnel" in normalized_guide
     assert "MULTI_DAEMON_TRAY.md#add-daemon-via-ssh" in normalized_guide
