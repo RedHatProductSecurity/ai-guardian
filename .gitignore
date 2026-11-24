@@ -7,6 +7,9 @@ build/
 dist/
 container/vendor/ai_guardian-*.whl
 *.egg-info/
+.env*
+*.pem
+*.key
 
 # Rust build artifacts
 rust/**/target/
