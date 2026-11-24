@@ -34,6 +34,8 @@ logger = logging.getLogger(__name__)
 
 NORMAL_CONTAINER_REPOSITORY = "quay.io/redhatproductsecurity/ai-guardian"
 OPENSHELL_CONTAINER_REPOSITORY = "quay.io/redhatproductsecurity/ai-guardian-openshell"
+AUTHORIZED_RELEASE_MAINTAINER = "itdove"
+AUTHORIZED_GITHUB_REPOSITORY = "RedHatProductSecurity/ai-guardian"
 
 
 def get_container_image_references(version: str) -> Dict[str, str]:
@@ -49,6 +51,46 @@ def get_container_image_references(version: str) -> Dict[str, str]:
 
 class AnnouncementError(RuntimeError):
     """Publication or announcement could not be confirmed; do not republish."""
+
+
+def verify_release_authorization(repo_path: str) -> None:
+    """Require the authenticated maintainer and canonical checkout before mutation."""
+    try:
+        identity = subprocess.run(
+            ["gh", "api", "--hostname", "github.com", "user", "--jq", ".login"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=30,
+            cwd=repo_path,
+        )
+        remote = subprocess.run(
+            ["git", "-C", repo_path, "remote", "get-url", "origin"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise AnnouncementError(
+            "Release authorization could not be verified; refusing mutation."
+        ) from error
+    if (
+        identity.returncode != 0
+        or identity.stdout.strip() != AUTHORIZED_RELEASE_MAINTAINER
+    ):
+        raise AnnouncementError(
+            "Authenticated GitHub identity is not authorized for release mutation."
+        )
+    remote_url = remote.stdout.strip().removesuffix(".git")
+    if remote.returncode != 0 or remote_url not in {
+        f"https://github.com/{AUTHORIZED_GITHUB_REPOSITORY}",
+        f"git@github.com:{AUTHORIZED_GITHUB_REPOSITORY}",
+        f"ssh://git@github.com/{AUTHORIZED_GITHUB_REPOSITORY}",
+    }:
+        raise AnnouncementError(
+            "Release checkout origin is not the authorized GitHub repository."
+        )
 
 
 class ReleaseAnnouncer:
@@ -350,6 +392,7 @@ class ReleaseAnnouncer:
                 "[dry-run] Not posted; publication and duplicate lookup will be checked before creation."
             )
             return None
+        verify_release_authorization(self.repo_path)
         self._verify_publication()
         repository_id, category_id = self._category()
         existing = self._existing(category_id)

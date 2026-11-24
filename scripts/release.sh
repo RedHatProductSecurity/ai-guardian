@@ -122,6 +122,24 @@ run() {
 RTD_API_ROOT="https://readthedocs.org/api/v3"
 RTD_PROJECT_SLUG="ai-guardian"
 RTD_CURL_AUTH_CONFIG=""
+AUTHORIZED_RELEASE_MAINTAINER="itdove"
+AUTHORIZED_GITHUB_REPOSITORY="RedHatProductSecurity/ai-guardian"
+
+verify_release_authorization() {
+    local operation="$1"
+    local authenticated_maintainer remote_url
+    authenticated_maintainer=$(gh api --hostname github.com user --jq .login 2>/dev/null || true)
+    [[ "$authenticated_maintainer" == "$AUTHORIZED_RELEASE_MAINTAINER" ]] || die \
+        "Release authorization denied for ${operation}: authenticated GitHub identity ${authenticated_maintainer:-unknown} is not authorized"
+    remote_url=$(git remote get-url origin 2>/dev/null || true)
+    remote_url="${remote_url%.git}"
+    case "$remote_url" in
+        "https://github.com/${AUTHORIZED_GITHUB_REPOSITORY}"|\
+        "git@github.com:${AUTHORIZED_GITHUB_REPOSITORY}"|\
+        "ssh://git@github.com/${AUTHORIZED_GITHUB_REPOSITORY}") ;;
+        *) die "Release authorization denied for ${operation}: origin is not the authorized repository" ;;
+    esac
+}
 
 rtd_api_get() {
     curl --config - --silent --show-error --fail --location --max-time 10 \
@@ -261,12 +279,7 @@ if ! $DRY_RUN; then
         "--confirm-version is required for --execute and must match the computed release version"
     [[ "$CONFIRM_VERSION" == "$NEW_VERSION" ]] || die \
         "Confirmation version ${CONFIRM_VERSION} does not match computed version ${NEW_VERSION}"
-    EXPECTED_MAINTAINER="${AI_GUARDIAN_RELEASE_MAINTAINER:-}"
-    [[ -n "$EXPECTED_MAINTAINER" ]] || die \
-        "AI_GUARDIAN_RELEASE_MAINTAINER is required for --execute"
-    AUTHENTICATED_MAINTAINER=$(gh api user --jq .login 2>/dev/null || true)
-    [[ "$AUTHENTICATED_MAINTAINER" == "$EXPECTED_MAINTAINER" ]] || die \
-        "GitHub identity ${AUTHENTICATED_MAINTAINER:-unknown} does not match the expected maintainer"
+    verify_release_authorization "release execution"
     if git ls-remote --exit-code --tags origin "$TAG_NAME" >/dev/null 2>&1; then
         die "Release tag ${TAG_NAME} already exists on origin"
     fi
@@ -509,6 +522,7 @@ else
     warn "No changes to commit — release commit already exists"
 fi
 
+if ! $DRY_RUN; then verify_release_authorization "release branch push"; fi
 run git push -u origin "$RELEASE_BRANCH"
 info "Release branch pushed"
 
@@ -531,6 +545,7 @@ else
         git push origin --delete "$TEST_TAG" 2>/dev/null || true
     fi
 
+    verify_release_authorization "TestPyPI tag push"
     info "Creating test tag for TestPyPI verification..."
     git tag -a "$TEST_TAG" -m "Test release ${TEST_TAG}"
     git push origin "$TEST_TAG"
@@ -548,6 +563,7 @@ else
     echo ""
     read -r -p "TestPyPI looks good? Continue to production tag? [y/N] " testpypi_answer
 
+    verify_release_authorization "TestPyPI tag cleanup"
     info "Cleaning up test tag..."
     git tag -d "$TEST_TAG"
     git push origin --delete "$TEST_TAG"
@@ -565,6 +581,7 @@ section "Phase 6: Production Tag"
 if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
     warn "Tag ${TAG_NAME} already exists — skipping tag creation"
     if ! git ls-remote --tags origin "$TAG_NAME" | grep -q "$TAG_NAME"; then
+        if ! $DRY_RUN; then verify_release_authorization "existing production tag push"; fi
         confirm "Tag exists locally but not on remote. Push ${TAG_NAME}?"
         run git push origin "$TAG_NAME"
         info "Tag ${TAG_NAME} pushed"
@@ -572,6 +589,7 @@ if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
         info "Tag ${TAG_NAME} already pushed to origin"
     fi
 else
+    if ! $DRY_RUN; then verify_release_authorization "production tag push"; fi
     confirm "About to tag ${TAG_NAME} and push (triggers PyPI publish + container build). Continue?"
 
     run git tag -a "$TAG_NAME" -m "Release ${NEW_VERSION}
@@ -1094,6 +1112,7 @@ else
     warn "No changes to commit — post-release commit already exists"
 fi
 
+if ! $DRY_RUN; then verify_release_authorization "main branch push"; fi
 run git push origin main
 info "Main branch updated"
 

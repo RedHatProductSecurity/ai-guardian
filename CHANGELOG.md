@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   failures during release dry-runs without checking authentication or contacting
   NotebookLM.
 ### Changed
+- **Release authorization hardening (#2846):** Enforce the fixed authorized
+  maintainer identity and canonical GitHub origin at release mutation points;
+  standalone announcements now apply the same checks. Agent skill copies cannot
+  authorize production tags, pushes, publication, or Discussions.
 - **Pattern server integrity:** Record bundle origin and SHA-256 metadata, reject
   mismatched pinned hashes, and warn in Doctor for unpinned or non-allowlisted
   pattern hosts. Official LeakTK bundles use the `raw.githubusercontent.com/leaktk`

@@ -32,9 +32,11 @@ try:
     import release_helper
 
     from release_helper import (
+        AnnouncementError,
         CursorHookVerifier,
         ReleaseHelper,
         get_container_image_references,
+        verify_release_authorization,
     )
 
     RELEASE_HELPER_AVAILABLE = True
@@ -43,6 +45,8 @@ except (ImportError, ModuleNotFoundError):
     ReleaseHelper = None
     CursorHookVerifier = None
     get_container_image_references = None
+    AnnouncementError = None
+    verify_release_authorization = None
 
 # Skip all tests if release_helper is not available
 pytestmark = pytest.mark.skipif(
@@ -209,6 +213,35 @@ def test_get_container_image_references_rejects_non_release_versions():
     """Container release tags must be stable semantic versions."""
     with pytest.raises(ValueError):
         get_container_image_references("1.2.0-dev")
+
+
+@pytest.mark.parametrize(
+    ("identity", "remote", "message"),
+    [
+        (
+            "contributor",
+            "https://github.com/RedHatProductSecurity/ai-guardian.git",
+            "identity",
+        ),
+        ("itdove", "https://github.com/example/wrong.git", "repository"),
+    ],
+)
+def test_release_authorization_rejects_untrusted_identity_or_repository(
+    tmp_path, monkeypatch, identity, remote, message
+):
+    """Standalone release mutations require both independently checked facts."""
+    responses = [
+        subprocess.CompletedProcess([], 0, f"{identity}\n", ""),
+        subprocess.CompletedProcess([], 0, f"{remote}\n", ""),
+    ]
+    monkeypatch.setattr(
+        release_helper.subprocess,
+        "run",
+        Mock(side_effect=lambda *args, **kwargs: responses.pop(0)),
+    )
+
+    with pytest.raises(AnnouncementError, match=message):
+        verify_release_authorization(str(tmp_path))
 
 
 def test_update_changelog():
@@ -399,6 +432,8 @@ def announcement_io(monkeypatch):
 
     def github(command, **kwargs):
         assert command[:4] == ["gh", "api", "--hostname", "github.com"]
+        if command[4:7] == ["user", "--jq", ".login"]:
+            return subprocess.CompletedProcess(command, 0, "itdove\n", "")
         if command[4] != "graphql":
             assert (
                 command[4]
@@ -449,6 +484,16 @@ def announcement_io(monkeypatch):
             return failure
         return subprocess.CompletedProcess(command, 0, json.dumps(result), "")
 
+    def git(command, **kwargs):
+        assert command[:2] == ["git", "-C"] and command[3:] == [
+            "remote",
+            "get-url",
+            "origin",
+        ]
+        return subprocess.CompletedProcess(
+            command, 0, "https://github.com/RedHatProductSecurity/ai-guardian.git\n", ""
+        )
+
     def http(request, **kwargs):
         stage = "pypi" if request.get_method() == "GET" else "download"
         if stage == "pypi":
@@ -472,7 +517,13 @@ def announcement_io(monkeypatch):
 
     state.gh = Mock(side_effect=github)
     state.http = Mock(side_effect=http)
-    monkeypatch.setattr(release_helper.subprocess, "run", state.gh)
+
+    def run(command, **kwargs):
+        if command[:1] == ["git"]:
+            return git(command, **kwargs)
+        return state.gh(command, **kwargs)
+
+    monkeypatch.setattr(release_helper.subprocess, "run", run)
     monkeypatch.setattr(release_helper, "urlopen", state.http)
     return state
 
