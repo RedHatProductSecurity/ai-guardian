@@ -336,10 +336,12 @@ removed by setting a broader base selector.
 ### Add daemon via SSH
 
 **Fresh headless Ubuntu VM?** Start with the
-[ordered PyPI/venv HTTPS/SSH guide](UBUNTU_VM.md), including the release gate,
-VM-hosted Console bootstrap and workstation-side pairing. Production PyPI
-1.21.0 includes HTTPS and SSH-managed enrollment; fresh-install, desktop and
-lifecycle qualification for the complete walkthrough remains open in that guide.
+[fresh-VM provisioning sections](UBUNTU_VM.md#fresh-vm-provisioning) in the
+Ubuntu guide. If the VM already has a host-key-verified alias and a healthy
+loopback HTTPS daemon, use its shorter [prepared-VM routine pairing
+path](UBUNTU_VM.md#prepared-vm-routine-pairing) instead. Production PyPI 1.21.0
+includes HTTPS and SSH-managed enrollment; fresh-install, desktop and lifecycle
+qualification for the complete walkthrough remains open in that guide.
 
 For an SSH-only VM (including a known AWS instance), choose **SSH → Add daemon via SSH**
 in the tray. The shared modal dispatcher tries **Native → Tkinter → NiceGUI**,

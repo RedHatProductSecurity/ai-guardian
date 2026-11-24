@@ -25,6 +25,64 @@ Use a tray version at least as new as the daemon. A merged PR or successful
 development build is not a substitute for installing the released package when
 qualifying the documented PyPI workflow.
 
+## Choose your path
+
+| Situation | Use this guide |
+|---|---|
+| The VM, SSH alias, HTTPS daemon and workstation tray are already prepared | Follow [Prepared VM: routine pairing](#prepared-vm-routine-pairing). |
+| The VM or daemon still needs installation, TLS, or HTTPS configuration | Follow [Fresh VM provisioning](#1-prepare-the-host-and-guest), then return to the prepared pairing path. |
+
+The prepared path is the normal workstation operation after one-time VM
+provisioning. It does not recreate certificates, open a bootstrap Console
+tunnel, install packages, or start the remote daemon. If a readiness check fails,
+stop and use the linked provisioning section rather than weakening verification.
+
+## Prepared VM: routine pairing
+
+This path assumes the VM is already provisioned and the workstation has an SSH
+alias such as `guardian-vm`. Perform the numbered checks from the machine named
+in the **Runs on** column.
+
+### Readiness checklist
+
+| Check | Runs on | Required result |
+|---|---|---|
+| SSH host key and alias | Workstation | The alias has been independently reviewed and `ssh -o BatchMode=yes guardian-vm true` succeeds without a prompt. |
+| SSH authentication | Workstation | The tray inherits the intended desktop SSH agent/keyring; no private key or password is copied to the VM or entered into AI Guardian. |
+| Daemon installation/configuration | VM | The daemon belongs to the SSH user and its config/state paths are available in non-interactive SSH. See [storage preconditions](MULTI_DAEMON_TRAY.md#posix-storage-preconditions). |
+| HTTPS readiness | VM | The daemon is running a loopback HTTPS REST listener, and an authenticated health/status check succeeds. IPC liveness alone is insufficient. |
+| TLS identity | VM + workstation | The expected SAN and certificate SHA-256 fingerprint are known through the independently verified SSH session and can be compared during pairing. |
+| Version | Both | The workstation tray is at least as new as the VM daemon and both use a released package. |
+
+### Pair from the workstation
+
+1. On the **workstation**, choose **SSH → Add daemon via SSH** in the tray and
+   enter the existing alias. The same action is available from the
+   workstation-hosted Web Console home under **SSH daemon connections**. Do not
+   use a VM-hosted Console page for enrollment.
+2. Review **Verify SSH daemon identity**. Compare the destination/user, remote
+   daemon name, runtime port, expected TLS SAN and certificate SHA-256
+   fingerprint with the values obtained through the verified SSH session.
+3. Check **Check to confirm this SSH destination and daemon certificate
+   identity**, then choose **Trust and add daemon**. The checkbox starts clear;
+   the action stays disabled until it is checked. Cancel/Close saves nothing.
+4. Confirm the success result and the connected `ssh-<destination>` target in
+   the tray. The pairing is stored privately on the workstation.
+
+The tray now owns the HTTPS REST tunnel. The **bootstrap Web Console tunnel**
+(`127.0.0.1:18080` to the VM's Console at `127.0.0.1:8080`) is only for
+first-time provisioning or deliberate VM Console access. It is separate from
+the **tray-managed REST tunnel**, which forwards the VM's loopback HTTPS daemon
+for routine status and administration. Stop any foreground bootstrap tunnel
+after provisioning; do not maintain a second REST tunnel or expose either
+listener publicly. See the [full SSH enrollment details](MULTI_DAEMON_TRAY.md#add-daemon-via-ssh).
+
+If the VM is not HTTPS-ready, return to [Create a dedicated lab TLS identity on
+the VM](#4-create-a-dedicated-lab-tls-identity-on-the-vm), [Bootstrap with the
+VM-hosted Web Console](#5-bootstrap-with-the-vm-hosted-web-console), and
+[Verify HTTPS before pairing](#7-verify-https-before-pairing). If SSH itself
+is not ready, start with [Verify SSH before involving AI Guardian](#2-verify-ssh-before-involving-ai-guardian).
+
 ## Which machine does what?
 
 Run commands yourself in ordinary terminals, not through an AI agent. Stop on a
@@ -44,6 +102,12 @@ marked otherwise, **VM** means an SSH shell as the regular user `guardian`;
 **Ordering matters: SSH-managed enrollment requires HTTPS first.** Use an
 ordinary SSH Console tunnel to configure HTTPS on the VM, verify it, **then**
 enroll from the workstation. A Console tunnel alone never enrolls a daemon.
+
+## Fresh VM provisioning
+
+The following numbered sections are the one-time provisioning workflow. They
+retain the detailed host, storage, TLS, bootstrap Console, restart, health-check
+and recovery procedures for a new VM.
 
 ## 1. Prepare the host and guest
 

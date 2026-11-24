@@ -76,6 +76,7 @@ they never load the user's configuration or contact a live SSH destination.
 """
 
 import json
+from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
@@ -100,6 +101,29 @@ from ai_guardian.daemon.ssh_tunnel import (
 )
 from ai_guardian.daemon.state import DaemonState
 from tests.fixtures.ssh_daemon import make_pairing
+
+
+def test_ssh_documentation_leads_with_prepared_vm_path_and_preserves_trust_steps():
+    """DOCUMENTATION: routine pairing is distinct from first-time provisioning."""
+    root = Path(__file__).parents[2]
+    guide = (root / "docs/UBUNTU_VM.md").read_text(encoding="utf-8")
+    tray = (root / "docs/MULTI_DAEMON_TRAY.md").read_text(encoding="utf-8")
+    index = (root / "docs/README.md").read_text(encoding="utf-8")
+    normalized_guide = " ".join(guide.split())
+
+    prepared = guide.index("## Prepared VM: routine pairing")
+    machine_roles = guide.index("## Which machine does what?")
+    provisioning = guide.index("## Fresh VM provisioning")
+    assert prepared < machine_roles < provisioning
+    assert "ssh -o BatchMode=yes guardian-vm true" in normalized_guide
+    assert "SSH → Add daemon via SSH" in normalized_guide
+    assert "Trust and add daemon" in normalized_guide
+    assert "Check to confirm this SSH destination and daemon certificate identity" in normalized_guide
+    assert "bootstrap Web Console tunnel" in normalized_guide
+    assert "tray-managed REST tunnel" in normalized_guide
+    assert "MULTI_DAEMON_TRAY.md#add-daemon-via-ssh" in normalized_guide
+    assert "UBUNTU_VM.md#prepared-vm-routine-pairing" in tray
+    assert "Prepared-VM pairing checklist" in index
 
 
 @pytest.fixture
