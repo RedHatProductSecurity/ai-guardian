@@ -50,6 +50,7 @@ ARG UV_VERSION=0.11.16
 ARG OPENCODE_VERSION=1.19.0
 ARG PI_VERSION=0.99.0
 ARG GROK_VERSION=1.0.63
+ARG OPENCLAW_VERSION=2026.6.1
 ARG GH_VERSION=2.74.1
 ARG GLAB_VERSION=1.91.0
 ARG INCLUDE_GITGUARDIAN=false
@@ -128,7 +129,7 @@ RUN DETECT_SECRETS_VERSION=$(/opt/uv-tools/ai-guardian/bin/python -c \
 
 # Node.js CLIs (installed to /opt/npm for predictable COPY paths)
 RUN npm install -g --prefix /opt/npm \
-        @google/gemini-cli @openai/codex "@xai-official/grok@${GROK_VERSION}" openclaw \
+        @google/gemini-cli @openai/codex "@xai-official/grok@${GROK_VERSION}" "openclaw@${OPENCLAW_VERSION}" \
         "@earendil-works/pi-coding-agent@${PI_VERSION}" 2>/dev/null \
     && (PATH="/opt/npm/bin:$PATH" gemini --version 2>/dev/null || echo "Gemini CLI installed") \
     && (PATH="/opt/npm/bin:$PATH" codex --version 2>/dev/null || echo "Codex CLI installed") \

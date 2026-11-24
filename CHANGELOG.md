@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   failures during release dry-runs without checking authentication or contacting
   NotebookLM.
 ### Changed
+- **Container build reliability:** Pin OpenClaw to the Node 22-compatible
+  `2026.6.1` release instead of resolving an incompatible latest version.
 - **Release authorization hardening (#2846):** Enforce the fixed authorized
   maintainer identity and canonical GitHub origin at release mutation points;
   standalone announcements now apply the same checks. Agent skill copies cannot
