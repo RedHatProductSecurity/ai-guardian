@@ -16,6 +16,7 @@ import tempfile
 import hashlib
 from pathlib import Path
 from unittest.mock import patch
+from urllib.parse import urlparse
 
 
 class TestPatternServerClient:
@@ -116,7 +117,7 @@ class TestPatternServerClient:
         assert info["bundle_sha256"] == client.expected_sha256
         assert info["verification_state"] == "verified"
         assert info["host_trusted"] is True
-        assert info["source"].startswith("https://raw.githubusercontent.com")
+        assert urlparse(info["source"]).hostname == "raw.githubusercontent.com"
 
     def test_pattern_server_disabled_by_default(self):
         """Test that features work without pattern server (backward compatibility)."""

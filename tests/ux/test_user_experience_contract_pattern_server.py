@@ -2,6 +2,7 @@
 
 import hashlib
 from unittest.mock import patch
+from urllib.parse import urlparse
 
 
 def test_unpinned_remote_patterns_remain_inactive(tmp_path, monkeypatch):
@@ -48,5 +49,5 @@ def test_verified_pattern_diagnostics_are_value_safe(tmp_path):
 
     info = client.verification_info()
     assert info["verification_state"] == "verified"
-    assert info["source"].startswith("https://raw.githubusercontent.com")
+    assert urlparse(info["source"]).hostname == "raw.githubusercontent.com"
     assert "token" not in str(info).lower()
