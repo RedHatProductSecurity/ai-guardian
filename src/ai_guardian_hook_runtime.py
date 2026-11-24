@@ -9,7 +9,9 @@ process from reading stdin or applying its configured failure policy.
 import io
 import json
 import os
+import socket
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
@@ -17,6 +19,135 @@ HOOK_FAILURE_MESSAGE = (
     "AI Guardian hook process failed; operation blocked by " "on_scan_error=block."
 )
 HOOK_FAILURE_REASON = "Operation blocked by ai-guardian: hook process failure"
+
+
+@dataclass(frozen=True)
+class HookDaemonDiagnostic:
+    """Safe, structured explanation for a daemon-to-direct fallback."""
+
+    reason: str
+    remote: bool = False
+
+    def as_dict(self) -> Dict[str, Any]:
+        return {"reason": self.reason, "remote": self.remote}
+
+
+@dataclass(frozen=True)
+class HookDaemonAttempt:
+    """Result of the optional daemon path before direct processing begins."""
+
+    response: Optional[Dict[str, Any]]
+    diagnostic: HookDaemonDiagnostic
+
+
+def attempt_daemon_hook_request(
+    hook_data: Dict[str, Any],
+    *,
+    remote_configured: bool,
+    stop_requested: bool,
+    is_running,
+    start,
+    request,
+    normalize,
+    timeout: float,
+) -> HookDaemonAttempt:
+    """Try the daemon once, returning a safe reason when direct mode is needed.
+
+    The callbacks keep this bootstrap component independent of the application
+    package and make startup races and response failures directly testable.
+    """
+    if remote_configured:
+        try:
+            running = bool(is_running())
+        except Exception:
+            running = False
+        if not running:
+            return HookDaemonAttempt(
+                None, HookDaemonDiagnostic("remote_unavailable", remote=True)
+            )
+    elif stop_requested:
+        return HookDaemonAttempt(
+            None, HookDaemonDiagnostic("explicit_stop", remote=False)
+        )
+    else:
+        try:
+            running = bool(is_running())
+        except Exception:
+            return HookDaemonAttempt(
+                None, HookDaemonDiagnostic("local_liveness_failure")
+            )
+        if not running:
+            try:
+                started = bool(start())
+            except Exception:
+                started = False
+                start_failed = True
+            else:
+                start_failed = not started
+
+            # A competing hook may have won the daemon startup race while this
+            # process was launching its candidate. Re-check before falling back.
+            try:
+                running = bool(is_running())
+            except Exception:
+                running = False
+            if not running:
+                return HookDaemonAttempt(
+                    None,
+                    HookDaemonDiagnostic(
+                        "local_start_failure" if start_failed else "local_unavailable"
+                    ),
+                )
+
+    try:
+        response = request(hook_data, timeout=timeout)
+    except (TimeoutError, socket.timeout):
+        return HookDaemonAttempt(
+            None,
+            HookDaemonDiagnostic(
+                "remote_request_timeout" if remote_configured else "request_timeout",
+                remote=remote_configured,
+            ),
+        )
+    except Exception:
+        return HookDaemonAttempt(
+            None,
+            HookDaemonDiagnostic(
+                "remote_request_failure" if remote_configured else "request_failure",
+                remote=remote_configured,
+            ),
+        )
+
+    if response is None:
+        return HookDaemonAttempt(
+            None,
+            HookDaemonDiagnostic(
+                "remote_unavailable" if remote_configured else "no_response",
+                remote=remote_configured,
+            ),
+        )
+
+    try:
+        normalized = normalize(hook_data, response)
+    except Exception:
+        normalized = None
+    if not isinstance(normalized, dict) or normalized.get("_hook_failure"):
+        return HookDaemonAttempt(
+            None,
+            HookDaemonDiagnostic(
+                (
+                    "remote_malformed_response"
+                    if remote_configured
+                    else "malformed_response"
+                ),
+                remote=remote_configured,
+            ),
+        )
+    return HookDaemonAttempt(
+        normalized,
+        HookDaemonDiagnostic("daemon_success", remote=remote_configured),
+    )
+
 
 _JSON_PROTOCOLS = {
     "claude",
@@ -533,6 +664,9 @@ def main():
 
 __all__ = [
     "HOOK_FAILURE_MESSAGE",
+    "HookDaemonAttempt",
+    "HookDaemonDiagnostic",
+    "attempt_daemon_hook_request",
     "build_failure_response",
     "ensure_hook_response",
     "get_on_scan_error_action",

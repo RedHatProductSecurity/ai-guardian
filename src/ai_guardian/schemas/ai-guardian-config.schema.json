@@ -2634,7 +2634,7 @@
     },
     "daemon": {
       "type": "object",
-      "description": "Background daemon configuration. The daemon auto-starts on any CLI command and falls back to direct processing if it cannot start.",
+      "description": "Background daemon configuration. Hook invocations use the daemon when available, never start a configured remote daemon locally, and fall back to direct processing when startup, connectivity, timeout, or response validation fails.",
       "properties": {
         "idle_timeout_minutes": {
           "type": "integer",

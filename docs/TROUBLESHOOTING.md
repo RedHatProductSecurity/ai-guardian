@@ -35,6 +35,27 @@ distinction and desktop-integration limitations.
 
 ## Daemon Startup Issues
 
+### Hook Falls Back to Direct Processing
+
+Hook processes use the daemon when it is available, but daemon availability is
+not a hard hook dependency. If local startup loses a concurrent startup race,
+the daemon is explicitly stopped, a request times out, or a response is
+malformed, the hook records a privacy-safe diagnostic reason and continues with
+direct in-process processing. Persisted pause state, notification outbox
+handoff, tracing, and the configured `on_scan_error` policy still apply to the
+direct path.
+
+When `AI_GUARDIAN_DAEMON_URL` is configured, the hook treats the daemon as
+remote: it never starts a local process. An unavailable remote daemon therefore
+falls back directly and is logged as `remote_unavailable` or a related remote
+request/response reason. Check the configured endpoint, TLS settings, and
+daemon health independently.
+
+The structured reason is emitted in the hook log under the
+`hook_daemon_diagnostic` field. It includes only the reason and whether the
+daemon was remote; hook payloads, commands, paths, credentials, and exception
+text are not included.
+
 ### Stale Lock File Blocking Daemon Start
 
 **Symptom:** `ai-guardian daemon start` fails with:

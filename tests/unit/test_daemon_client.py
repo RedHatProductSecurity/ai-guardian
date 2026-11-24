@@ -364,6 +364,21 @@ class TestStartDaemonBackground:
                 assert not start_daemon_background()
             mock_popen.assert_not_called()
 
+    def test_waits_for_competing_hook_start(self, tmp_path, monkeypatch):
+        """Concurrent hooks wait briefly for the startup winner."""
+        monkeypatch.setenv("AI_GUARDIAN_STATE_DIR", str(tmp_path))
+        (tmp_path / "daemon.starting").write_text(str(os.getpid()), encoding="utf-8")
+        with (
+            mock.patch(
+                "ai_guardian.daemon.client.is_daemon_running",
+                side_effect=[False, True],
+            ),
+            mock.patch("ai_guardian.daemon.client.time.sleep"),
+            mock.patch("subprocess.Popen") as mock_popen,
+        ):
+            assert start_daemon_background()
+        mock_popen.assert_not_called()
+
 
 class TestWaitForProcessDeath:
     def test_returns_true_when_pid_is_none(self):

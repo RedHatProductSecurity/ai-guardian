@@ -4,7 +4,7 @@ import json
 import builtins
 import os
 from io import StringIO
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -13,6 +13,7 @@ from ai_guardian.hook_adapters import BaseAgentAdapter, CodexAdapter, CursorAdap
 from ai_guardian.hook_processing import process_hook_data
 from ai_guardian_hook_runtime import (
     HOOK_FAILURE_MESSAGE,
+    attempt_daemon_hook_request,
     build_failure_response,
     ensure_hook_response,
     main as runtime_main,
@@ -198,6 +199,83 @@ def test_malformed_daemon_response_follows_selected_policy():
     assert _json_output(allow) == {}
     assert _json_output(block)["decision"] == "block"
     assert block["_blocked"] is True
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "reason"),
+    [
+        (
+            {"remote_configured": True, "stop_requested": False},
+            "remote_unavailable",
+        ),
+        (
+            {"remote_configured": False, "stop_requested": True},
+            "explicit_stop",
+        ),
+    ],
+)
+def test_daemon_attempt_diagnostics_do_not_start_local_daemon(kwargs, reason):
+    """Remote and explicitly stopped hooks never launch a local daemon."""
+    start = lambda: pytest.fail("daemon must not start")
+    result = attempt_daemon_hook_request(
+        {},
+        **kwargs,
+        is_running=lambda: False,
+        start=start,
+        request=lambda *_args, **_kwargs: pytest.fail("request must not run"),
+        normalize=lambda *_args: {},
+        timeout=2.0,
+    )
+
+    assert result.response is None
+    assert result.diagnostic.reason == reason
+    assert result.diagnostic.remote is kwargs["remote_configured"]
+
+
+def test_daemon_attempt_recovers_when_competing_hook_wins_startup_race():
+    """A second liveness check avoids direct fallback after a startup race."""
+    running = iter((False, True))
+    start = lambda: False
+    result = attempt_daemon_hook_request(
+        {"event": "PreToolUse"},
+        remote_configured=False,
+        stop_requested=False,
+        is_running=lambda: next(running),
+        start=start,
+        request=lambda *_args, **_kwargs: {"output": "{}", "exit_code": 0},
+        normalize=lambda *_args: {"output": "{}", "exit_code": 0},
+        timeout=2.0,
+    )
+
+    assert result.diagnostic.reason == "daemon_success"
+    assert result.response == {"output": "{}", "exit_code": 0}
+
+
+def test_daemon_attempt_distinguishes_timeout_and_malformed_response():
+    """Request and protocol failures are safe, distinct direct-fallback reasons."""
+    timeout = attempt_daemon_hook_request(
+        {},
+        remote_configured=False,
+        stop_requested=False,
+        is_running=lambda: True,
+        start=lambda: pytest.fail("already running"),
+        request=Mock(side_effect=TimeoutError()),
+        normalize=lambda *_args: {},
+        timeout=2.0,
+    )
+    malformed = attempt_daemon_hook_request(
+        {},
+        remote_configured=False,
+        stop_requested=False,
+        is_running=lambda: True,
+        start=lambda: pytest.fail("already running"),
+        request=lambda *_args, **_kwargs: {"output": "not-json", "exit_code": 0},
+        normalize=lambda *_args: {"_hook_failure": True},
+        timeout=2.0,
+    )
+
+    assert timeout.diagnostic.reason == "request_timeout"
+    assert malformed.diagnostic.reason == "malformed_response"
 
 
 @pytest.mark.parametrize(
