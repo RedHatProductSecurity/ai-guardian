@@ -150,9 +150,10 @@ When the user asks to send diagnostic info to support:
 
 **Step 1 — Prepare:** Call `prepare_support_bundle()`. This creates sanitized copies in a temp directory.
 
-The default destination is public GitHub Discussions in
-`RedHatProductSecurity/ai-guardian`: Bug Reports (`bug-reports`, default) or Q&A
-(`q-a`) only. Preparation does not publish anything. Warn that the repository is
+The default destination is a local ZIP under `~/support-bundles`. Creating the ZIP
+does not authenticate, upload, or send data to support. Public GitHub Discussions
+in `RedHatProductSecurity/ai-guardian` are opt-in: Bug Reports (`bug-reports`,
+default) or Q&A (`q-a`) only. Preparation does not publish anything. Warn that the repository is
 public and sanitization is not a guarantee of confidentiality. Empty/missing
 destinations use GitHub; explicitly saved local/S3/GCS/email exports are preserved.
 The tray's Contact supports action respects saved export settings. With GitHub,

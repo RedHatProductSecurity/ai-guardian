@@ -398,8 +398,10 @@ submission. Deleting a Gist cannot retract copies or forks. Retries reuse a veri
 Gist rather than uploading a duplicate, and uncertain upload/publication outcomes
 must never be blindly retried. There is no automatic login or scope upgrade.
 
-Default: public **GitHub Discussions** in `RedHatProductSecurity/ai-guardian`,
-**Bug Reports** (`bug-reports`) preselected and **Q&A** (`q-a`) the only alternative.
+Default: a local ZIP under `~/support-bundles`; creating it does not authenticate,
+upload, or send data to support. Public **GitHub Discussions** in
+`RedHatProductSecurity/ai-guardian` must be explicitly configured, with **Bug
+Reports** (`bug-reports`) preselected and **Q&A** (`q-a`) the only alternative.
 Sanitization is not a confidentiality guarantee. Preparation stays local; only
 the user may inspect protected contents. Successful publication returns
 `discussion_url`; direct the user there, not to a separate support contact.
