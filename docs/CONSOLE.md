@@ -147,6 +147,10 @@ The tray's **Web Console** menu item opens the browser console for the selected
 daemon. The tray also uses NiceGUI for target-selection and form dialogs when
 native Tkinter dialogs are unavailable.
 
+See the [tray-to-Console parity matrix](TRAY_CONSOLE_PARITY.md) for the complete
+action inventory, target/capability requirements, remote eligibility, and
+workstation-only boundary used by the Console and future broker work.
+
 On Linux, the tray may require the AppIndicator extension and PyGObject. Run
 `ai-guardian doctor` to inspect those optional integrations.
 

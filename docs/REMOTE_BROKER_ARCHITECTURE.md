@@ -279,3 +279,4 @@ flowchart LR
 - [#2644 Optional tray extension](https://github.com/RedHatProductSecurity/ai-guardian/issues/2644)
 - [Multi-daemon tray design](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md)
 - [Console documentation](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md)
+- [Tray-to-Console parity matrix](TRAY_CONSOLE_PARITY.md)

@@ -28,6 +28,7 @@ To generate the static site locally on demand, run `mkdocs build`. The generated
 | [Scanner Installation](SCANNER_INSTALLATION.md) | Install and manage pinned secret scanner engines |
 | [TOML Pattern Engine](TOML_PATTERNS.md) | Built-in Python scanner with 267 pre-compiled TOML patterns |
 | [Console Guide](CONSOLE.md) | NiceGUI browser console for managing configuration |
+| [Tray-to-Console Parity](TRAY_CONSOLE_PARITY.md) | Reviewed tray action matrix, target scope, remote eligibility, and host/broker boundaries |
 | [Modal providers](MODAL_PROVIDERS.md) | Platform/capability matrix, startup-only fallback, preferences and manual desktop checks |
 | [Hook Ordering](HOOKS.md) | How hooks work and ordering requirements |
 | [Troubleshooting](TROUBLESHOOTING.md) | Daemon, tray, container, and OpenShell issue resolution |
