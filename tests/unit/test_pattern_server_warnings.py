@@ -6,6 +6,7 @@ warnings are shown when the pattern server fails to provide patterns.
 Also tests context-aware warning messages (Issue #384).
 """
 
+import hashlib
 import logging
 import os
 import tempfile
@@ -34,6 +35,9 @@ def _minimal_env():
 
 
 from ai_guardian.patterns.server import PatternServerClient
+
+TEST_BUNDLE_SHA256 = hashlib.sha256(b"[rules]\n# Test patterns").hexdigest()
+TEST_PINNED_SHA256 = "0" * 64
 
 
 class PatternServerWarningsTest(TestCase):
@@ -93,6 +97,7 @@ class PatternServerWarningsTest(TestCase):
         config = {
             "url": "https://pattern-server.example.com",
             "allow_untrusted_host": True,
+            "sha256": TEST_PINNED_SHA256,
             "warn_on_failure": True,
             "auth": {"token_env": "TEST_TOKEN"},
         }
@@ -302,6 +307,7 @@ class PatternServerWarningsTest(TestCase):
         config = {
             "url": "https://pattern-server.example.com",
             "allow_untrusted_host": True,
+            "sha256": TEST_PINNED_SHA256,
             "warn_on_failure": True,
             "auth": {"token_env": "TEST_TOKEN"},
         }
@@ -341,6 +347,7 @@ class PatternServerWarningsTest(TestCase):
         config = {
             "url": "https://pattern-server.example.com",
             "allow_untrusted_host": True,
+            "sha256": TEST_PINNED_SHA256,
             "warn_on_failure": True,
             "auth": {"token_env": "TEST_TOKEN"},
         }
@@ -380,6 +387,7 @@ class PatternServerWarningsTest(TestCase):
         config = {
             "url": "https://pattern-server.example.com",
             "allow_untrusted_host": True,
+            "sha256": TEST_PINNED_SHA256,
             "warn_on_failure": True,
             "auth": {"token_env": "TEST_TOKEN"},
         }
@@ -415,6 +423,7 @@ class PatternServerWarningsTest(TestCase):
         config = {
             "url": "https://pattern-server.example.com",
             "allow_untrusted_host": True,
+            "sha256": TEST_PINNED_SHA256,
             "warn_on_failure": True,
             "auth": {"token_env": "TEST_TOKEN"},
         }
@@ -650,6 +659,7 @@ class PatternServerWarningsTest(TestCase):
         config = {
             "url": "https://raw.githubusercontent.com",
             "patterns_endpoint": "/leaktk/patterns/main/target/patterns/gitleaks/8.27.0",
+            "sha256": TEST_BUNDLE_SHA256,
             "auth": {"token_env": "TEST_TOKEN"},
         }
 
@@ -700,6 +710,7 @@ class PatternServerWarningsTest(TestCase):
         config = {
             "url": "https://raw.githubusercontent.com",
             "patterns_endpoint": "/leaktk/patterns/main/target/patterns/gitleaks/8.27.0",
+            "sha256": TEST_BUNDLE_SHA256,
             "auth": {"token_env": "TEST_TOKEN"},
         }
 
@@ -750,6 +761,7 @@ class PatternServerWarningsTest(TestCase):
         config = {
             "url": "https://private-patterns.example.com",
             "allow_untrusted_host": True,
+            "sha256": TEST_PINNED_SHA256,
             "patterns_endpoint": "/api/v1/patterns",
             "auth": {"token_env": "PRIVATE_PATTERN_TOKEN"},
         }
@@ -798,6 +810,7 @@ class PatternServerWarningsTest(TestCase):
         config = {
             "url": "https://private-patterns.example.com",
             "allow_untrusted_host": True,
+            "sha256": TEST_PINNED_SHA256,
             "patterns_endpoint": "/api/v1/patterns",
             "auth": {"token_env": "PRIVATE_PATTERN_TOKEN"},
         }

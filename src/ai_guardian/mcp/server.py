@@ -1015,24 +1015,6 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
             return {"scanners": []}
 
     @server.tool()
-    def get_patterns_list() -> Dict[str, Any]:
-        """Get active detection pattern categories and counts. Returns category names and pattern counts only — no regex patterns."""
-        try:
-            from ai_guardian.patterns.lister import PatternLister
-
-            lister = PatternLister()
-            categories = lister.get_categories()
-            result = {}
-            for cat in categories:
-                count = sum(g.count for g in cat.built_in_groups)
-                if count > 0:
-                    result[cat.name] = count
-            return {"categories": result}
-        except Exception as e:
-            logger.error("get_patterns_list error: %s", e)
-            return {"categories": {}}
-
-    @server.tool()
     def get_metrics(since_days: Optional[int] = None) -> Dict[str, Any]:
         """Get violation statistics and trends. Optionally filter to last N days."""
         try:

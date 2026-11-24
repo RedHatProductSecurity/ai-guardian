@@ -239,7 +239,8 @@
           "_comment": "Optional: Enhanced secret detection patterns from a pattern server",
           "_comment2": "This is an ADVANCED feature - most users should use default Gitleaks patterns",
           "_comment3": "Presence of this section = enabled. To disable: set to null or remove entirely.",
-          "_comment4": "Cascade/fallback: pattern server → project .gitleaks.toml → Gitleaks defaults",
+           "_comment4": "Cascade/fallback: pattern server → project .gitleaks.toml → Gitleaks defaults",
+           "_trust_comment": "Remote content is used only with an approved HTTPS endpoint and a matching SHA-256 pin. Bearer tokens are never sent to unapproved or unpinned endpoints.",
           "_usage": "Remove this entire 'pattern_server' section if you don't need it (will use defaults)",
           "_immutable_example_remote_config": {
             "_comment": "In remote config: Enforce custom pattern server that cannot be overridden",
@@ -269,7 +270,9 @@
             ],
             "_reference": "https://github.com/leaktk/patterns"
           },
-          "patterns_endpoint": "/patterns/gitleaks/8.27.0",
+           "patterns_endpoint": "/patterns/gitleaks/8.27.0",
+           "sha256": "",
+           "_sha256_comment": "Required: set the expected SHA-256 digest of the exact remote bundle before remote patterns can be used.",
           "warn_on_failure": true,
           "_warn_on_failure_comment": "Show warning when pattern server fails (auth, network, etc). Default: true. Set to false to suppress warnings.",
           "auth": {

@@ -2081,7 +2081,6 @@ Options:
 | `get_violations` | Get recent security violations |
 | `get_metrics` | Get violation statistics |
 | `get_scanner_status` | Get installed scanner engines |
-| `get_patterns_list` | Get active detection patterns |
 | `doctor` | Run health check |
 | `scan_directory` | Scan project for security issues |
 

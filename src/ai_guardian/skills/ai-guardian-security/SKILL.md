@@ -4,7 +4,7 @@ description: >
   AI security advisor — proactive security checks via ai-guardian MCP tools.
   Use this skill whenever you have access to ai-guardian MCP tools (check_path,
   check_command, check_mcp_trust, sanitize_text, get_violations,
-  get_version, get_config, get_scanner_status, get_scanner_supported, get_patterns_list,
+   get_version, get_config, get_scanner_status, get_scanner_supported,
   get_metrics, doctor, prepare_support_bundle, send_support_bundle,
   scan_directory, scan_directory_report). Activate when:
   accessing files in unfamiliar directories, running commands with URLs or credentials,
@@ -74,6 +74,12 @@ All checks are advisory. Hook enforcement is available only for supported
 integrations with hooks installed and active; regular ChatGPT desktop mode has
 no automatic hook enforcement.
 
+Pattern-server trust: remote patterns are a supply-chain dependency. They are
+used only after the endpoint is approved and the bundle matches its configured
+SHA-256 pin. Bearer credentials are never sent to unapproved or unpinned
+endpoints. The operator diagnostics may report the source and verification
+state; this skill does not expose pattern inventories or regex contents.
+
 ## When a Tool is Blocked
 
 When a hook blocks a tool call (Read, Write, Bash, etc.) and you need to explain why:
@@ -107,7 +113,6 @@ Security config can change at any time (via Console, tray, CLI, or file edit). W
 | "Is my setup working?" | `doctor()` — see below |
 | "How many violations?" | `get_metrics(since_days=7)` |
 | "What scanners do I have?" | `get_scanner_status()` and `get_scanner_supported()` |
-| "What patterns are checked?" | `get_patterns_list()` |
 | "Scan this project" | `scan_directory()` — summary first, offer report if violations found |
 
 ### Presenting violation details
