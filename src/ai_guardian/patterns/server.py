@@ -20,6 +20,7 @@ import logging
 import hashlib
 import json
 import os
+import re
 import sys
 import time
 from datetime import datetime, timezone
@@ -172,11 +173,11 @@ class PatternServerClient:
             return None
 
         # Check if patterns need refresh
-        if self._needs_refresh():
+        if self._needs_refresh() or not self._cache_is_usable():
             logger.debug("Patterns need refresh, fetching from server")
             if not self._fetch_patterns():
                 # Fetch failed, check if cached patterns are still usable
-                if self._is_expired():
+                if self._is_expired() or not self._cache_is_usable():
                     logger.error("Cached patterns expired and refresh failed")
                     return None
                 logger.warning("Pattern refresh failed, using cached patterns")
@@ -245,6 +246,24 @@ class PatternServerClient:
         file_age = time.time() - self.cache_path.stat().st_mtime
         return file_age > self.expire_after
 
+    def _cache_is_usable(self) -> bool:
+        """Require cached content to have a verified, matching digest."""
+        if not self.cache_path.exists() or not re.fullmatch(
+            r"[0-9a-f]{64}", self.expected_sha256
+        ):
+            return False
+        try:
+            metadata = json.loads(self.metadata_path.read_text(encoding="utf-8"))
+            if not isinstance(metadata, dict) or not metadata.get("verified"):
+                return False
+            content_hash = hashlib.sha256(self.cache_path.read_bytes()).hexdigest()
+            return (
+                content_hash == self.expected_sha256
+                and metadata.get("sha256") == content_hash
+            )
+        except (OSError, ValueError, TypeError):
+            return False
+
     def _get_auth_token(self) -> Optional[str]:
         """
         Get authentication token from environment or file.
@@ -297,12 +316,18 @@ class PatternServerClient:
                 )
                 return False
 
+            if not re.fullmatch(r"[0-9a-f]{64}", self.expected_sha256):
+                logger.error(
+                    "Pattern server requires a valid SHA-256 pin; refusing remote content"
+                )
+                return False
+
             # Prepare headers
             headers = {
                 "User-Agent": "ai-guardian/1.0.0",
             }
 
-            # Get authentication token (optional)
+            # Credentials are only sent to an approved, integrity-pinned endpoint.
             token = self._get_auth_token()
             if token:
                 headers["Authorization"] = f"Bearer {token}"
@@ -313,7 +338,7 @@ class PatternServerClient:
                 )
 
             # Security: Enforce HTTPS for pattern server (reject http://)
-            if url.startswith("http://"):
+            if parsed.scheme != "https":
                 logger.error(
                     f"HTTP URLs not allowed for pattern server (use HTTPS): {url}"
                 )
@@ -362,16 +387,11 @@ class PatternServerClient:
             if not isinstance(raw_content, bytes):
                 raw_content = response.text.encode("utf-8")
             content_hash = hashlib.sha256(raw_content).hexdigest()
-            if self.expected_sha256 and content_hash != self.expected_sha256:
+            if content_hash != self.expected_sha256:
                 logger.error(
                     "Pattern bundle SHA-256 verification failed; cached bundle retained"
                 )
                 return False
-            if not self.expected_sha256:
-                logger.warning(
-                    "Pattern bundle has no pinned SHA-256; refusing to mark it verified"
-                )
-
             # Save patterns to cache
             self.cache_path.parent.mkdir(parents=True, exist_ok=True)
             self.cache_path.write_text(response.text)
@@ -380,7 +400,8 @@ class PatternServerClient:
                     {
                         "origin": url,
                         "sha256": content_hash,
-                        "verified": bool(self.expected_sha256),
+                        "verified": True,
+                        "host_trusted": official or self.allow_untrusted_host,
                         "fetched_at": time.time(),
                     },
                     indent=2,
@@ -431,15 +452,23 @@ class PatternServerClient:
             "host": urlparse(self.base_url or "").hostname or "",
             "expected_sha256": self.expected_sha256,
             "allow_untrusted_host": self.allow_untrusted_host,
+            "host_trusted": False,
             "cache": str(self.cache_path),
+            "source": "",
             "bundle_sha256": "",
             "verified": False,
+            "verification_state": "unverified",
         }
         try:
             metadata = json.loads(self.metadata_path.read_text(encoding="utf-8"))
             if isinstance(metadata, dict):
                 info["bundle_sha256"] = metadata.get("sha256", "")
+                info["source"] = metadata.get("origin", "")
                 info["verified"] = bool(metadata.get("verified"))
+                info["host_trusted"] = bool(metadata.get("host_trusted"))
+                info["verification_state"] = (
+                    "verified" if info["verified"] else "unverified"
+                )
         except (OSError, ValueError, TypeError):
             pass  # intentionally silent — diagnostic metadata is best effort
         return info

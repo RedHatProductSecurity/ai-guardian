@@ -22,7 +22,6 @@ const TRUSTED_GUARDIAN_TOOLS = new Set([
   'ai-guardian__get_config',
   'ai-guardian__get_scanner_status',
   'ai-guardian__get_scanner_supported',
-  'ai-guardian__get_patterns_list',
   'ai-guardian__get_metrics',
   'ai-guardian__doctor',
   'ai-guardian__prepare_support_bundle',

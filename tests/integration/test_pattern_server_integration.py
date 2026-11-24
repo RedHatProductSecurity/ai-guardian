@@ -73,6 +73,24 @@ class TestPatternServerClient:
         mock_requests.get.assert_not_called()
 
     @patch("ai_guardian.patterns.server.requests")
+    def test_unpinned_hosts_are_inactive_and_do_not_receive_tokens(
+        self, mock_requests, tmp_path, monkeypatch
+    ):
+        from ai_guardian.patterns.server import PatternServerClient
+
+        monkeypatch.setenv("AI_GUARDIAN_PATTERN_TOKEN", "synthetic-token")
+        client = PatternServerClient(
+            {
+                "url": "https://patterns.example.com",
+                "allow_untrusted_host": True,
+                "cache": {"path": str(tmp_path / "p.toml")},
+                "auth": {"token_env": "AI_GUARDIAN_PATTERN_TOKEN"},
+            }
+        )
+        assert client._fetch_patterns() is False
+        mock_requests.get.assert_not_called()
+
+    @patch("ai_guardian.patterns.server.requests")
     def test_pinned_hash_is_recorded_and_mismatch_keeps_cache(
         self, mock_requests, tmp_path
     ):
@@ -96,6 +114,9 @@ class TestPatternServerClient:
         info = client.verification_info()
         assert info["verified"] is True
         assert info["bundle_sha256"] == client.expected_sha256
+        assert info["verification_state"] == "verified"
+        assert info["host_trusted"] is True
+        assert info["source"].startswith("https://raw.githubusercontent.com")
 
     def test_pattern_server_disabled_by_default(self):
         """Test that features work without pattern server (backward compatibility)."""
@@ -110,8 +131,8 @@ class TestPatternServerClient:
         assert len(redactor.compiled_patterns) > 0
 
     @patch("ai_guardian.patterns.server.requests")
-    def test_fallback_to_cache_on_server_failure(self, mock_requests):
-        """Test fallback to cached patterns when server is unavailable."""
+    def test_unverified_cache_is_not_used_on_server_failure(self, mock_requests):
+        """A cache without a verified digest must remain inactive."""
         from ai_guardian.patterns.server import PatternServerClient
 
         # Create a temp cache file
@@ -126,9 +147,9 @@ class TestPatternServerClient:
             config = {"url": "https://example.com", "cache": {"path": str(cache_path)}}
             client = PatternServerClient(config, pattern_type="ssrf")
 
-            # Should return cache path despite server failure
+            # The legacy cache has no integrity metadata and must not be used.
             result = client.get_patterns_path()
-            assert result == cache_path
+            assert result is None
 
         finally:
             cache_path.unlink()
@@ -185,15 +206,14 @@ class TestPatternLoaders:
         assert "172.16.0.0/12" in ip_ranges
         assert "192.168.0.0/16" in ip_ranges
 
-    def test_secret_pattern_loader_no_immutable(self):
+    def test_secret_pattern_loader_has_immutable_baseline(self):
         """Test that SecretPatternLoader has no immutable patterns."""
         from ai_guardian.patterns.loader import SecretPatternLoader
 
         loader = SecretPatternLoader()
         immutable = loader.get_immutable_patterns()
 
-        # No immutable patterns for secrets (all enterprise-customizable)
-        assert immutable["patterns"] == []
+        assert immutable["patterns"]
 
     def test_unicode_pattern_loader_immutable_patterns(self):
         """Test that Unicode loader correctly separates immutable from overridable."""
@@ -293,9 +313,12 @@ class TestThreeTierMerge:
         }
 
         merged_replace = loader.merge_patterns({}, server_patterns_replace, None)
-        # Should only have server pattern (defaults replaced)
-        assert len(merged_replace["patterns"]) == 1
-        assert merged_replace["patterns"][0]["secret_type"] == "Only This"
+        # Replace mode cannot remove the bundled baseline.
+        assert len(merged_replace["patterns"]) > 1
+        assert any(
+            pattern["secret_type"] == "Only This"
+            for pattern in merged_replace["patterns"]
+        )
 
     def test_local_config_always_additive(self):
         """Test that local config additions are always added (never replaced)."""

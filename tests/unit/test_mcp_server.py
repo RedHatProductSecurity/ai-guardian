@@ -1508,45 +1508,6 @@ class TestGetScannerSupported:
         assert len(result["scanners"]) > 0
 
 
-class TestGetPatternsList:
-    """Test get_patterns_list tool."""
-
-    @patch("ai_guardian.patterns.lister.PatternLister")
-    def test_returns_counts_only(self, mock_pl_cls):
-        mock_cat = MagicMock()
-        mock_cat.name = "Prompt Injection"
-        mock_group = MagicMock()
-        mock_group.count = 15
-        mock_cat.built_in_groups = [mock_group]
-        mock_pl = MagicMock()
-        mock_pl.get_categories.return_value = [mock_cat]
-        mock_pl_cls.return_value = mock_pl
-
-        server = create_server()
-        tool = server._tool_manager._tools["get_patterns_list"]
-        result = tool.fn()
-        assert result["categories"]["Prompt Injection"] == 15
-
-    @patch("ai_guardian.patterns.lister.PatternLister")
-    def test_no_regex_exposed(self, mock_pl_cls):
-        """Pattern counts only, no regex patterns."""
-        mock_cat = MagicMock()
-        mock_cat.name = "Test"
-        mock_group = MagicMock()
-        mock_group.count = 5
-        mock_cat.built_in_groups = [mock_group]
-        mock_pl = MagicMock()
-        mock_pl.get_categories.return_value = [mock_cat]
-        mock_pl_cls.return_value = mock_pl
-
-        server = create_server()
-        tool = server._tool_manager._tools["get_patterns_list"]
-        result = tool.fn()
-        result_str = json.dumps(result)
-        assert "regex" not in result_str.lower()
-        assert "\\\\" not in result_str
-
-
 class TestGetMetrics:
     """Test get_metrics tool."""
 
@@ -2031,7 +1992,7 @@ class TestServerCreation:
         server = create_server()
         assert server is not None
 
-    def test_server_has_18_tools(self):
+    def test_server_has_17_tools(self):
         server = create_server()
         tools = server._tool_manager._tools
         expected = {
@@ -2046,7 +2007,6 @@ class TestServerCreation:
             "get_config",
             "get_scanner_status",
             "get_scanner_supported",
-            "get_patterns_list",
             "get_metrics",
             "doctor",
             "prepare_support_bundle",

@@ -291,7 +291,6 @@ also be returned. An MCP startup failure reports `startup_failure` or
 | `get_config` | `project_dir?` | feature enabled/disabled map | Current security posture |
 | `get_scanner_status` | — | installed scanners + versions | Scanner inventory |
 | `get_scanner_supported` | — | all available scanners | What can be installed |
-| `get_patterns_list` | — | category names + counts | Active detection patterns |
 | `get_metrics` | `since_days?` | stats by type/severity | Violation statistics |
 | `doctor` | — | check results with fix hints | Health check |
 
@@ -343,7 +342,6 @@ The MCP server is a **security advisor, not a security map**. It answers yes/no 
 | `check_command` | allowed/blocked + reason category | Which pattern matched, the deny list |
 | `get_config` | Feature on/off, action mode | Allowlist patterns, regex, rule details |
 | `get_violations` | Type, timestamp, action; non-sensitive locations, normalized policy decisions, vetted input diagnostics/correlation | Sensitive-finding locations, matched pattern internals, raw input/content, arbitrary stored reasons |
-| `get_patterns_list` | Category names and counts | Regex patterns |
 
 ### Self-protection
 

@@ -114,6 +114,14 @@ Enable pattern server in your config:
 | `url` | Pattern server API endpoint | - |
 | `cache_ttl` | Cache duration in seconds | `3600` (1 hour) |
 | `fallback_to_defaults` | Use hardcoded patterns if server unavailable | `true` |
+| `sha256` | Required SHA-256 digest of the exact remote bundle | unset (remote content inactive) |
+| `allow_untrusted_host` | Explicitly approve a non-official HTTPS host | `false` |
+
+Remote bundles are accepted only after HTTPS endpoint approval and a matching
+`sha256` pin. Bearer tokens are not sent to unapproved or unpinned endpoints.
+Cached bundles are reused only when their recorded digest still matches the
+configured pin. Operator diagnostics report the active source and verification
+state without exposing credentials or pattern contents.
 
 ### Per-Feature Configuration
 
@@ -442,10 +450,11 @@ All patterns from the server are validated before use:
 
 **Mitigations:**
 1. **TLS/HTTPS required** - Encrypted transport
-2. **Pattern validation** - Regex safety checks
-3. **Fallback to defaults** - If server seems compromised
-4. **Audit logging** - Track pattern changes
-5. **Version pinning** - Optionally lock to specific version
+2. **Endpoint approval** - Official host or explicit reviewed host approval
+3. **SHA-256 pinning** - Remote content must match the configured digest
+4. **Pattern validation** - Regex safety checks
+5. **Immutable secret baseline** - Remote replace mode cannot remove bundled rules
+6. **Fallback to defaults** - Unverified or unavailable content stays inactive
 
 ---
 

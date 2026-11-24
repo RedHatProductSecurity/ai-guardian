@@ -503,8 +503,9 @@ class SecretPatternLoader(PatternLoader):
     """
     Pattern loader for Secret Redaction.
 
-    Immutable: None (all patterns can be enterprise-customized)
-    Overridable: All 35+ secret types
+    Immutable: Bundled secret rules, which remain active even when a server
+    requests replace mode
+    Overridable: None for the bundled baseline; server rules are additive
     """
 
     def __init__(self):
@@ -514,9 +515,10 @@ class SecretPatternLoader(PatternLoader):
         """
         Get immutable secret patterns.
 
-        No immutable patterns - all can be customized by enterprise.
+        Keep the bundled baseline active so remote content cannot create a
+        secret-detection false negative.
         """
-        return {"patterns": []}
+        return self.get_default_patterns()
 
     def get_default_patterns(self) -> Dict[str, Any]:
         """
@@ -556,28 +558,21 @@ class SecretPatternLoader(PatternLoader):
         """
         Merge secret patterns.
 
-        Supports two modes:
-        - replace: Pattern server replaces all defaults
-        - extend: Pattern server adds to defaults (default)
+        Remote patterns are always additive to the immutable bundled baseline.
+        Historical replace mode cannot remove the baseline.
         """
-        # Check override mode from server metadata
-        override_mode = "extend"
-        if server and "metadata" in server:
-            override_mode = server["metadata"].get("override_mode", "extend")
-
-        if override_mode == "replace" and server:
-            # Replace mode: use only server patterns
-            merged = {"patterns": server.get("patterns", [])}
-            logger.info(
-                f"{self.feature_name}: Using pattern server patterns (replace mode)"
-            )
-        else:
-            # Extend mode: defaults + server + local
-            default_patterns = self.get_default_patterns()
-            merged = {"patterns": default_patterns["patterns"].copy()}
-
-            if server:
-                merged["patterns"].extend(server.get("patterns", []))
+        baseline = immutable.get("patterns") or self.get_default_patterns().get(
+            "patterns", []
+        )
+        merged = {"patterns": list(baseline)}
+        existing = {pattern.get("regex") for pattern in merged["patterns"]}
+        if server:
+            for pattern in server.get("patterns", []):
+                regex = pattern.get("regex") if isinstance(pattern, dict) else None
+                if regex not in existing:
+                    merged["patterns"].append(pattern)
+                    if regex:
+                        existing.add(regex)
 
         # Always add local patterns (additive)
         if local and "additional_patterns" in local:
