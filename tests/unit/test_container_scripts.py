@@ -199,6 +199,12 @@ class TestContainerLaunchers:
             normal_image
         )
 
+    def test_normal_image_pins_openclaw_to_the_node22_compatible_release(self):
+        """Avoid an upstream latest release silently requiring a newer Node runtime."""
+        normal_image = DOCKERFILE.read_text(encoding="utf-8")
+        assert "ARG OPENCLAW_VERSION=2026.6.1" in normal_image
+        assert '"openclaw@${OPENCLAW_VERSION}"' in normal_image
+
     def test_container_defaults_match_latest_stable_ai_guardian_release(self):
         expected_version = _latest_stable_release_version()
 

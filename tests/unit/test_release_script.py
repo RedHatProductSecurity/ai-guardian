@@ -75,6 +75,15 @@ def test_release_script_help_and_docs_verification_contract():
     assert "${OPENSHELL_CONTAINER_IMAGE}" in script
 
 
+def test_release_authorization_is_not_configurable_or_skill_exposed():
+    """Release mutation authorization cannot be supplied by agent-authored text."""
+    script = RELEASE_SCRIPT.read_text(encoding="utf-8")
+    assert 'AI_GUARDIAN_RELEASE_MAINTAINER="' not in script
+    assert 'AUTHORIZED_RELEASE_MAINTAINER="itdove"' in script
+    assert "git remote get-url origin" in script
+    assert not (REPO_ROOT / ".claude" / "skills" / "release" / "SKILL.md").exists()
+
+
 def test_readme_links_to_latest_release_and_latest_development_docs():
     """The README links to the newest stable changelog version and main docs."""
     readme = README.read_text(encoding="utf-8")
@@ -284,7 +293,9 @@ if program == "git":
         args = args[2:]
     if args[:2] == ["-c", "merge.conflictStyle=merge"]:
         args = args[2:]
-    if args == ["branch", "--show-current"]:
+    if args[:3] == ["remote", "get-url", "origin"]:
+        print("https://github.com/RedHatProductSecurity/ai-guardian.git")
+    elif args == ["branch", "--show-current"]:
         print(os.environ.get("RELEASE_CURRENT_BRANCH", "main"))
     elif args[0] == "rev-parse":
         if args[1] == "--git-path":
@@ -388,7 +399,7 @@ elif program == "gh":
 
     if args[:2] == ["auth", "status"]:
         pass
-    elif args[:2] == ["api", "user"]:
+    elif args[:5] == ["api", "--hostname", "github.com", "user", "--jq"]:
         print(os.environ.get("RELEASE_MAINTAINER", "itdove"))
     elif args[:2] == ["release", "view"]:
         sys.exit(1)
