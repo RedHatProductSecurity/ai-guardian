@@ -626,7 +626,7 @@ path for them.
 | `UserPromptSubmit` | Managed | Scans prompts, including prompt injection, secrets, PII, and transcript coverage. |
 | `PreToolUse` | Managed | Enforces tool permissions and pre-tool content/security scanners. |
 | `PermissionRequest` | Recognized, not managed | If configured by the user, applies the permission and security pipeline; denials use Codex’s nested decision shape. |
-| `PostToolUse` | Managed | Scans tool results and applies post-tool handling/redaction where supported. |
+| `PostToolUse` | Managed | Scans tool results; Codex can report feedback but has no verified model-visible sanitized-result replacement, so trusted-session secret findings remain blocked. |
 | `PreCompact` | Recognized, not managed | If configured by the user, acknowledges the lifecycle event without inferring security-enforceable content or a decision. |
 | `PostCompact` | Managed | Marks the session for security-context reinjection after compaction. |
 | `SubagentStart` | Recognized, not managed | If configured by the user, acknowledges the lifecycle event without inferring security-enforceable content or a decision. |

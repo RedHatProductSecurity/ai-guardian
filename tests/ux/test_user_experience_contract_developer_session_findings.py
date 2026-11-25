@@ -654,6 +654,9 @@ def test_sensitive_output_replacement_requires_verified_host_and_tool():
     assert not _supports_safe_post_output_replacement("cursor", "Read")
     assert _supports_safe_post_output_replacement("aiderdesk", "Read")
     assert _supports_safe_post_output_replacement("opencode", "Bash")
+    # Codex exposes PostToolUse feedback but has no verified model-visible
+    # replacement contract, so trusted-session findings must remain blocked.
+    assert not _supports_safe_post_output_replacement("codex", "Bash")
     assert _supports_safe_post_output_replacement("pi", "bash")
     assert not _supports_safe_post_output_replacement("gemini", "Read")
     assert not _supports_safe_post_output_replacement("cline", "Read")
