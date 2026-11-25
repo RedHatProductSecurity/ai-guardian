@@ -1,0 +1,146 @@
+name: Bifrost Middleware
+
+on:
+  pull_request:
+    paths:
+      - "go/bifrost-middleware/**"
+      - "docs/BIFROST_MIDDLEWARE_ARCHITECTURE.md"
+      - ".github/workflows/bifrost-middleware.yml"
+  push:
+    paths:
+      - "go/bifrost-middleware/**"
+      - "docs/BIFROST_MIDDLEWARE_ARCHITECTURE.md"
+      - ".github/workflows/bifrost-middleware.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: "1.27.4"
+  BIFROST_VERSION: "2.6.0"
+  BIFROST_REVISION: "172617bb045c6f43d697843c115e64f0155ed143"
+  MODULE_DIR: "go/bifrost-middleware"
+
+jobs:
+  metadata:
+    name: Validate compatibility metadata
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Validate pinned metadata
+        working-directory: ${{ env.MODULE_DIR }}
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          metadata = json.loads(Path("compatibility.json").read_text())
+          assert metadata["bifrost"]["version"] == "2.6.0"
+          assert metadata["bifrost"]["revision"] == "172617bb045c6f43d697843c115e64f0155ed143"
+          assert metadata["toolchain"]["go"] == "1.27.4"
+          assert metadata["bifrost"]["build_mode"] == "dynamic-plugin"
+          assert not any(item["os"] == "windows" for item in metadata["platforms"])
+          PY
+
+      - name: Check module declaration
+        run: grep -Fq 'go 1.27.4' "${MODULE_DIR}/go.mod"
+
+  build:
+    name: Build plugin (${{ matrix.goarch }})
+    needs: metadata
+    if: ${{ hashFiles('go/bifrost-middleware/**/*.go') != '' }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goarch: amd64
+            runner: ubuntu-24.04
+            artifact: ai-guardian-bifrost-v2.6.0-go1.27.4-linux-amd64.so
+          - goarch: arm64
+            runner: ubuntu-24.04-arm
+            artifact: ai-guardian-bifrost-v2.6.0-go1.27.4-linux-arm64.so
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check out pinned Bifrost source
+        uses: actions/checkout@v5
+        with:
+          repository: maximhq/bifrost
+          ref: ${{ env.BIFROST_REVISION }}
+          path: .bifrost
+          fetch-depth: 1
+
+      - name: Set up pinned Go toolchain
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+          cache-dependency-path: ${{ env.MODULE_DIR }}/go.sum
+
+      - name: Verify toolchain
+        run: test "$(go version | awk '{print $3}')" = "go${GO_VERSION}"
+
+      - name: Verify Bifrost revision metadata
+        working-directory: ${{ env.MODULE_DIR }}
+        run: |
+          test "$(python -c 'import json; print(json.load(open("compatibility.json"))["bifrost"]["revision"])')" = "${BIFROST_REVISION}"
+          test "$(python -c 'import json; print(json.load(open("compatibility.json"))["bifrost"]["version"])')" = "${BIFROST_VERSION}"
+          grep -Fq "go ${GO_VERSION}" "${GITHUB_WORKSPACE}/.bifrost/core/go.mod"
+
+      - name: Bind plugin to pinned Bifrost core
+        working-directory: ${{ env.MODULE_DIR }}
+        run: |
+          go mod edit -replace=github.com/maximhq/bifrost/core=${GITHUB_WORKSPACE}/.bifrost/core
+          go mod tidy
+
+      - name: Test plugin module
+        working-directory: ${{ env.MODULE_DIR }}
+        run: go test ./...
+
+      - name: Build shared object
+        working-directory: ${{ env.MODULE_DIR }}
+        env:
+          GOOS: linux
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "1"
+        run: |
+          mkdir -p dist
+          go build -trimpath -buildmode=plugin -o "dist/${{ matrix.artifact }}" .
+          file "dist/${{ matrix.artifact }}"
+          sha256sum "dist/${{ matrix.artifact }}" > "dist/${{ matrix.artifact }}.sha256"
+
+      - name: Upload CI artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ai-guardian-bifrost-v2.6.0-go1.27.4-linux-${{ matrix.goarch }}
+          path: ${{ env.MODULE_DIR }}/dist/
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release assets
+    needs: build
+    if: ${{ startsWith(github.ref, 'refs/tags/') }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: ai-guardian-bifrost-v2.6.0-go1.27.4-linux-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Create combined checksums
+        working-directory: release-assets
+        run: sha256sum *.so > checksums.txt
+
+      - name: Publish release assets
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            release-assets/*.so
+            release-assets/*.sha256
+            release-assets/checksums.txt
