@@ -111,6 +111,68 @@ class TestMCPIdentityUX:
         assert allowed is True
         assert message is None
 
+    @patch("ai_guardian.tools.policy.verify_active_attestation", return_value=True)
+    def test_verified_native_mcp_name_is_normalized_for_all_hosts(self, mock_verify):
+        """Host-native built-in names reach the common verified namespace gate."""
+        checker = ToolPolicyChecker(
+            config={
+                "permissions": {
+                    "enabled": True,
+                    "rules": [
+                        {
+                            "matcher": "mcp__*",
+                            "mode": "deny",
+                            "patterns": ["*"],
+                        }
+                    ],
+                }
+            }
+        )
+        allowed, message, tool_name = checker.check_tool_allowed(
+            {
+                "hook_event_name": "PreToolUse",
+                "hook_source": "codex",
+                "tool_name": "ai-guardian__check_path",
+                "tool_input": {},
+            }
+        )
+
+        mock_verify.assert_called_once_with("ai-guardian")
+        assert allowed is True
+        assert message is None
+        assert tool_name == "mcp__ai-guardian__check_path"
+
+    @patch("ai_guardian.tools.policy.verify_active_attestation", return_value=True)
+    def test_external_mcp_tool_remains_denied(self, mock_verify):
+        """MCP servers other than AI Guardian remain covered by deny rules."""
+        checker = ToolPolicyChecker(
+            config={
+                "permissions": {
+                    "enabled": True,
+                    "rules": [
+                        {
+                            "matcher": "mcp__*",
+                            "mode": "deny",
+                            "patterns": ["*"],
+                        }
+                    ],
+                }
+            }
+        )
+        allowed, message, tool_name = checker.check_tool_allowed(
+            {
+                "hook_event_name": "PreToolUse",
+                "hook_source": "codex",
+                "tool_name": "mcp__notebooklm__query",
+                "tool_input": {},
+            }
+        )
+
+        mock_verify.assert_not_called()
+        assert allowed is False
+        assert message is not None
+        assert tool_name == "mcp__notebooklm__query"
+
     @patch("ai_guardian.tools.policy.verify_active_attestation", return_value=False)
     def test_identity_gate_remains_active_when_permissions_are_disabled(
         self, mock_verify

@@ -41,6 +41,24 @@ def is_ai_guardian_mcp_tool(tool_name: str) -> bool:
     return tool_name.startswith("mcp__ai-guardian__")
 
 
+def normalize_ai_guardian_mcp_tool_name(tool_name: Any) -> Any:
+    """Normalize host-specific names for the built-in MCP server.
+
+    Hosts may omit the transport prefix or add an extension namespace before
+    forwarding an MCP tool to the shared policy engine. Only the known
+    AI Guardian namespace is normalized; all other names are returned intact.
+    """
+    if not isinstance(tool_name, str):
+        return tool_name
+    if tool_name.startswith("mcp__ai-guardian__"):
+        return tool_name
+    if tool_name.startswith("ai-guardian__"):
+        return "mcp__" + tool_name
+    if tool_name.startswith("ai-guardian-goose_ai-guardian__"):
+        return "mcp__ai-guardian__" + tool_name.split("__", 1)[1]
+    return tool_name
+
+
 def get_identity_manifest_path() -> Path:
     """Return the protected setup-time identity manifest path."""
     return get_config_dir() / IDENTITY_MANIFEST_FILENAME
