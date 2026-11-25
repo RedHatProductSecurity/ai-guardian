@@ -60,6 +60,7 @@ from ai_guardian.ide_registry import get_cli_executables_for_agent_type
 from ai_guardian.self_protection import is_host_agent_cli_protection_enabled
 from ai_guardian.mcp.identity import (
     is_ai_guardian_mcp_tool,
+    normalize_ai_guardian_mcp_tool_name,
     verify_active_attestation,
 )
 from ai_guardian.tools.patterns import (
@@ -1330,6 +1331,11 @@ class ToolPolicyChecker:
             # generic enough to collide with other agents' tool names.
             if is_antigravity:
                 tool_name = antigravity_tool_name(tool_name, tool_input)
+
+            # Normalize host-specific built-in MCP names before policy checks.
+            # This is shared by every agent integration; external MCP names are
+            # left unchanged and remain subject to ordinary permissions.
+            tool_name = normalize_ai_guardian_mcp_tool_name(tool_name)
 
             # Augment Code: normalize tool names and mcp: prefix
             if tool_name and tool_name in self._AUGMENT_TOOL_MAP:
