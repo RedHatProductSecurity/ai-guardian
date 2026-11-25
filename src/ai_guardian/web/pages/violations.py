@@ -1046,7 +1046,10 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
         with ui.row().classes("gap-2 mt-1"):
 
             def show_details(violation=v):
-                with ui.dialog() as dialog, ui.card().classes("w-[600px]"):
+                with (
+                    ui.dialog() as dialog,
+                    ui.card().classes("w-[600px] max-w-[calc(100vw-2rem)] min-w-0"),
+                ):
                     ui.label("Violation Details").classes("text-lg font-bold")
                     _render_tool_diagnostics(violation)
                     violation_json = json.dumps(
@@ -1057,7 +1060,10 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
                     ui.code(
                         violation_json,
                         language="json",
-                    ).classes("max-h-[300px] overflow-auto text-xs")
+                    ).classes(
+                        "w-full max-w-full min-w-0 max-h-[300px] overflow-auto "
+                        "whitespace-pre text-xs"
+                    )
 
                     with ui.row().classes("gap-2 mt-1"):
                         render_mirror_attribution(violation, service)
@@ -1094,7 +1100,10 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
                         instructions, snippet = _get_resolution_instructions(violation)
                         ui.label(instructions).classes("text-sm")
                         if snippet:
-                            ui.code(snippet, language="json").classes("text-xs mt-1")
+                            ui.code(snippet, language="json").classes(
+                                "w-full max-w-full min-w-0 max-h-[300px] "
+                                "overflow-auto whitespace-pre text-xs mt-1"
+                            )
                             ui.button(
                                 "Copy Config",
                                 icon="content_copy",

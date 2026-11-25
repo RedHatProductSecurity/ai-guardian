@@ -107,6 +107,18 @@ class TestViolationModalOpenAsPage:
         source = inspect.getsource(_render_violation_card)
         assert "Resolution guidance: open Details" in source
 
+    def test_violation_modal_contains_overflowing_text(self):
+        import inspect
+
+        from ai_guardian.web.pages.violations import _render_violation_card
+
+        source = inspect.getsource(_render_violation_card)
+        assert "max-w-[calc(100vw-2rem)]" in source
+        assert source.count("w-full max-w-full min-w-0") >= 2
+        assert source.count("max-h-[300px]") >= 2
+        assert source.count("overflow-auto") >= 2
+        assert source.count("whitespace-pre") >= 2
+
     def test_canary_has_no_suppression_action(self):
         from ai_guardian.web.pages.violations import _ALLOWLIST_TYPES
 
