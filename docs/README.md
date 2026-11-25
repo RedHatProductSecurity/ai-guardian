@@ -35,6 +35,7 @@ To generate the static site locally on demand, run `mkdocs build`. The generated
 | [Uninstall and orphan recovery](UNINSTALL.md) | Standalone scoped POSIX/Windows cleanup, preservation contract, and missing-runtime lifecycle matrix |
 | [Support bundles](SUPPORT.md) | Reviewed public GitHub Discussions, restricted categories, legacy export, and safe retries |
 | [OpenShell Supervisor Middleware](OPENSHELL_MIDDLEWARE.md) | External Rust service managed by OpenShell gateway registration and policy |
+| [Bifrost Middleware Architecture](BIFROST_MIDDLEWARE_ARCHITECTURE.md) | Architecture, compatibility boundary, coverage matrix, and enforcement contracts for the optional Bifrost plugin |
 
 ## Security Features
 
