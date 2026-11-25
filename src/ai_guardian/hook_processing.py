@@ -2042,6 +2042,20 @@ def _build_security_message(hook_data, daemon_state, now):
         return _SECURITY_SYSTEM_MESSAGE
 
 
+def _supports_security_instruction_injection(adapter) -> bool:
+    """Return whether the host contract delivers prompt context to the model.
+
+    Several adapters share Claude Code's response enum, but their hosts do not
+    consume ``systemMessage``/``additionalContext`` as model context.
+    """
+    return _get_agent_type(adapter) in {
+        "claude_code",
+        "codex",
+        "pi",
+        "antigravity",
+    }
+
+
 def inject_security_only(hook_data, daemon_state=None):
     """Inject security instructions without scanning.
 
@@ -2059,11 +2073,7 @@ def inject_security_only(hook_data, daemon_state=None):
             # decision protocol; generic {} stdout is a Goose hook failure.
             event = adapter.normalize_input(hook_data).event
             return adapter.format_response(False, hook_event=event)
-        if adapter.ide_type not in (
-            IDEType.CLAUDE_CODE,
-            IDEType.ANTIGRAVITY,
-            IDEType.PI,
-        ):
+        if not _supports_security_instruction_injection(adapter):
             return None
 
         normalized = adapter.normalize_input(hook_data)
@@ -2321,7 +2331,7 @@ def _process_hook_data(hook_data, daemon_state=None):
         # Inject only on first prompt per session + after blocks (not every prompt)
         security_message = None
         if (
-            ide_type in (IDEType.CLAUDE_CODE, IDEType.ANTIGRAVITY, IDEType.PI)
+            _supports_security_instruction_injection(adapter)
             and hook_event == HookEvent.PROMPT
         ):
             try:
