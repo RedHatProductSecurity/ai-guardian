@@ -303,6 +303,54 @@ class TestProcessHookDataSecurityMessage(TestCase):
     @patch("ai_guardian.hook_processing._load_security_instructions_config")
     @patch("ai_guardian.config.loaders._load_secret_redaction_config")
     @patch("ai_guardian.hook_processing._load_pattern_server_config")
+    def test_security_message_not_injected_for_opencode_bridge(
+        self, mock_pattern_config, mock_redaction_config, mock_si_config
+    ):
+        """OpenCode's plugin bridge does not deliver systemMessage to the model."""
+        mock_pattern_config.return_value = None
+        mock_redaction_config.return_value = (None, None)
+        mock_si_config.return_value = (None, None)
+
+        result = ai_guardian.process_hook_data(
+            {
+                "hook_event_name": "message.submit",
+                "hook_source": "opencode",
+                "opencode_version": "1.19.0",
+                "session_id": "opencode-security-rules",
+                "cwd": "/tmp/project",
+                "prompt": "Hello",
+            }
+        )
+
+        self.assertNotIn("SECURITY RULES", json.dumps(json.loads(result["output"])))
+
+    @patch("ai_guardian.hook_processing._load_security_instructions_config")
+    @patch("ai_guardian.config.loaders._load_secret_redaction_config")
+    @patch("ai_guardian.hook_processing._load_pattern_server_config")
+    def test_security_message_not_injected_for_kilo_plugin(
+        self, mock_pattern_config, mock_redaction_config, mock_si_config
+    ):
+        """Kilo's mutable chat hook has no native model-context field."""
+        mock_pattern_config.return_value = None
+        mock_redaction_config.return_value = (None, None)
+        mock_si_config.return_value = (None, None)
+
+        result = ai_guardian.process_hook_data(
+            {
+                "hook_event_name": "UserPromptSubmit",
+                "hook_source": "kilo",
+                "kilo_plugin_api": "v1",
+                "session_id": "kilo-security-rules",
+                "cwd": "/tmp/project",
+                "prompt": "Hello",
+            }
+        )
+
+        self.assertNotIn("SECURITY RULES", json.dumps(json.loads(result["output"])))
+
+    @patch("ai_guardian.hook_processing._load_security_instructions_config")
+    @patch("ai_guardian.config.loaders._load_secret_redaction_config")
+    @patch("ai_guardian.hook_processing._load_pattern_server_config")
     def test_security_message_on_empty_prompt(
         self, mock_pattern_config, mock_redaction_config, mock_si_config
     ):
