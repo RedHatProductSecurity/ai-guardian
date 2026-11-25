@@ -240,6 +240,14 @@ def test_kilo_safe_post_output_replacement_is_limited_to_verified_bash_path():
     assert _supports_safe_post_output_replacement("kilo", "read") is False
 
 
+def test_codex_post_output_requires_block_when_replacement_is_unverified():
+    integration = next(item for item in SUPPORTED_IDE_REGISTRY if item.key == "codex")
+
+    assert integration.safe_post_output_replacement is False
+    assert _supports_safe_post_output_replacement("codex", "Bash") is False
+    assert _supports_safe_post_output_replacement("opencode", "Bash") is True
+
+
 def test_kilo_plugin_payload_keeps_kilo_identity_and_normalizes_v1_file_input(
     tmp_path, monkeypatch
 ):
