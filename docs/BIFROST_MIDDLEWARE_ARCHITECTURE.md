@@ -34,6 +34,79 @@ passthrough, gateway MCP traffic, and background-operation coverage remain
 conditional until Bifrost source-level and harness validation proves the exact
 hook ordering and commitment boundary.
 
+## Repository and Artifact Layout
+
+The implementation lives under `go/bifrost-middleware/` as an independent Go
+module. Keeping the plugin module separate from the Python package and the
+existing Rust OpenShell middleware prevents unrelated language toolchains from
+participating in plugin builds while preserving one repository and release
+version.
+
+```text
+go/bifrost-middleware/
+├── compatibility.json       # pinned Bifrost revision/toolchain/artifacts
+├── go.mod                   # Go 1.27.4 module boundary
+├── internal/                # daemon client, identity, policy, hook adapter
+└── tests/                   # contract and Bifrost harness tests
+```
+
+The first release artifacts are Linux AMD64 and ARM64 shared objects. macOS
+AMD64 and ARM64 remain later targets. Windows is not a native `.so` target
+because Go's standard `plugin` mechanism does not provide a supported Windows
+implementation. Artifact names, target priority, and runtime requirements are
+tracked in `go/bifrost-middleware/compatibility.json`.
+
+Release filenames include all host-selection inputs, for example
+`ai-guardian-bifrost-v2.6.0-go1.27.4-linux-amd64.so`. Users should select the
+asset matching their installed Bifrost version, Go toolchain, operating system,
+and architecture rather than choosing by CPU architecture alone.
+
+The plugin is not independently portable merely because its CPU architecture
+matches the host. Bifrost must be built with dynamic plugin loading enabled,
+and the plugin and host must match the pinned Bifrost source, Go toolchain,
+architecture, and relevant build settings. Until those inputs are available,
+the repository metadata is a compatibility contract, not a claim that a
+prebuilt `.so` is distributable. A compatible Bifrost executable or container
+may be required for deployment and is a separate release artifact decision.
+
+### Installation Contract
+
+Installation is intentionally an operator action, not part of the AI Guardian
+Python installer. The operator selects the release asset whose filename matches
+the Bifrost version, Go toolchain, operating system, and architecture; verifies
+the published SHA-256 checksum; and copies the shared object to a protected,
+operator-owned Bifrost plugin directory. The absolute plugin path is then
+registered in Bifrost's plugin configuration and Bifrost is restarted or
+reloaded using its documented lifecycle command.
+
+The plugin must not be loaded from a writable project or user-content
+directory. Daemon endpoint credentials belong in the deployment's protected
+environment or secret store and must never be embedded in plugin configuration
+examples or logs. The Python installer does not install Bifrost, replace its
+host binary, or automatically configure a gateway.
+
+The AI Guardian daemon is a prerequisite for enforcement. The operator must
+install the normal AI Guardian package, create its configuration and scanners,
+and start the daemon before starting Bifrost:
+
+```bash
+ai-guardian setup --create-config --install-scanner
+ai-guardian daemon start -b
+ai-guardian daemon status
+```
+
+The plugin uses the protected local Unix socket by default, normally
+`~/.local/state/ai-guardian/daemon.sock`. `AI_GUARDIAN_DAEMON_SOCKET` can point
+to an explicitly configured local socket. For remote deployments,
+`AI_GUARDIAN_DAEMON_URL` selects an authenticated HTTPS daemon endpoint and
+`AI_GUARDIAN_DAEMON_TOKEN_FILE` or the protected token configuration supplies
+its credential. These values belong to the Bifrost service environment; they
+are not accepted from client requests. If the configured daemon cannot be
+reached or returns an invalid verdict, the security-enforcing profile fails
+closed. `AI_GUARDIAN_BIFROST_FAILURE_MODE=fail_open` is an explicit
+monitoring-only mode for control-plane failures; it does not convert an
+explicit daemon security denial into an allow or provider fallback.
+
 ## Responsibilities
 
 ```mermaid

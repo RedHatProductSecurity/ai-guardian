@@ -1,0 +1,26 @@
+{
+  "plugin": "ai-guardian-bifrost",
+  "bifrost": {
+    "version": "2.6.0",
+    "revision": "172617bb045c6f43d697843c115e64f0155ed143",
+    "hook_contract": "PreLLMHook/PostLLMHook",
+    "build_mode": "dynamic-plugin"
+  },
+  "toolchain": {
+    "go": "1.27.4"
+  },
+  "platforms": [
+    {"os": "linux", "architecture": "amd64", "priority": "high", "artifact": "ai-guardian-bifrost-v2.6.0-go1.27.4-linux-amd64.so"},
+    {"os": "linux", "architecture": "arm64", "priority": "high", "artifact": "ai-guardian-bifrost-v2.6.0-go1.27.4-linux-arm64.so"},
+    {"os": "darwin", "architecture": "arm64", "priority": "later", "artifact": "ai-guardian-bifrost-v2.6.0-go1.27.4-darwin-arm64.so"},
+    {"os": "darwin", "architecture": "amd64", "priority": "later", "artifact": "ai-guardian-bifrost-v2.6.0-go1.27.4-darwin-amd64.so"}
+  ],
+  "unsupported": [
+    {"os": "windows", "architecture": "amd64", "reason": "Go's native shared-object plugin mechanism is not supported"}
+  ],
+  "runtime_requirements": [
+    "Bifrost must be built with dynamic plugin loading enabled",
+    "The plugin and host must use matching OS, architecture, and Go toolchain",
+    "The AI Guardian daemon endpoint and authentication must be operator configured"
+  ]
+}
