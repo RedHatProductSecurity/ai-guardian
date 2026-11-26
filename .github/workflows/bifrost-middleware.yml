@@ -50,7 +50,6 @@ jobs:
   build:
     name: Build plugin (${{ matrix.goarch }})
     needs: metadata
-    if: ${{ hashFiles('go/bifrost-middleware/**/*.go') != '' }}
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
