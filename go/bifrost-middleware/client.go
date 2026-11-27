@@ -92,6 +92,9 @@ func newDaemonClientFromEnvironment() (*daemonClient, error) {
 		failClosed: true,
 		httpClient: &http.Client{Timeout: defaultTimeout},
 	}
+	if action, ok := configuredScanErrorAction(); ok {
+		client.failClosed = action == "block"
+	}
 	if mode := os.Getenv("AI_GUARDIAN_BIFROST_FAILURE_MODE"); mode != "" {
 		switch mode {
 		case "fail_closed":
@@ -126,6 +129,56 @@ func newDaemonClientFromEnvironment() (*daemonClient, error) {
 		client.socket = filepath.Join(stateDir, "daemon.sock")
 	}
 	return client, nil
+}
+
+// configuredScanErrorAction follows the global ai-guardian.json policy. The
+// Bifrost-specific environment variable remains an explicit deployment
+// override for older installations that do not share the config directory.
+func configuredScanErrorAction() (string, bool) {
+	read := func(payload []byte) (string, bool) {
+		var config struct {
+			OnScanError string `json:"on_scan_error"`
+		}
+		if json.Unmarshal(payload, &config) != nil || (config.OnScanError != "allow" && config.OnScanError != "block") {
+			return "", false
+		}
+		return config.OnScanError, true
+	}
+	if inline := os.Getenv("AI_GUARDIAN_CONFIG_INLINE"); inline != "" {
+		if action, ok := read([]byte(inline)); ok {
+			return action, true
+		}
+	}
+	if overlay := os.Getenv("AI_GUARDIAN_CONFIG_OVERLAY"); overlay != "" {
+		if payload, err := os.ReadFile(overlay); err == nil {
+			if action, ok := read(payload); ok {
+				return action, true
+			}
+		}
+	}
+	configDir := os.Getenv("AI_GUARDIAN_CONFIG_DIR")
+	if configDir == "" {
+		configDir = os.Getenv("AI_GUARDIAN_HOME")
+	}
+	if configDir == "" {
+		configDir = os.Getenv("XDG_CONFIG_HOME")
+		if configDir == "" {
+			if home, err := os.UserHomeDir(); err == nil {
+				configDir = filepath.Join(home, ".config")
+			}
+		}
+	}
+	if configDir == "" {
+		return "", false
+	}
+	payload, err := os.ReadFile(filepath.Join(configDir, "ai-guardian", "ai-guardian.json"))
+	if err != nil {
+		payload, err = os.ReadFile(filepath.Join(configDir, "ai-guardian.json"))
+	}
+	if err != nil {
+		return "", false
+	}
+	return read(payload)
 }
 
 func daemonToken() (string, error) {

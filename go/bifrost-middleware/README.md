@@ -50,10 +50,12 @@ Remote mode requires TLS verification and authentication. The plugin never
 accepts a daemon URL, token, or project mapping from an inference request.
 `AI_GUARDIAN_DAEMON_URL` takes precedence over the local socket when set.
 
-Failure handling defaults to enforcement mode. Daemon timeouts, unavailable
-connections, and malformed verdicts block traffic. An operator may explicitly
-set `AI_GUARDIAN_BIFROST_FAILURE_MODE=fail_open` for monitoring-only operation;
-this mode must not be used when the gateway is expected to enforce policy.
+Failure handling follows the global `on_scan_error` value in
+`ai-guardian.json`: `"block"` blocks on daemon timeouts, unavailable
+connections, and malformed verdicts, while `"allow"` permits monitoring-only
+operation. `AI_GUARDIAN_BIFROST_FAILURE_MODE=fail_open` remains an explicit
+deployment override for hosts that do not share the config directory. Neither
+setting can turn an explicit daemon security denial into an allow.
 Explicit daemon security denials remain blocking in both modes.
 
 After the daemon is ready:

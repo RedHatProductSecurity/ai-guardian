@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -100,5 +101,21 @@ func TestDaemonClientUnixCheckUsesDaemonSDKEnvelope(t *testing.T) {
 	}
 	if !verdict.Clean || verdict.Blocked {
 		t.Fatalf("unexpected verdict: %+v", verdict)
+	}
+}
+
+func TestConfiguredScanErrorActionReadsGlobalConfig(t *testing.T) {
+	configDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(configDir, "ai-guardian.json"), []byte(`{"on_scan_error":"allow"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("AI_GUARDIAN_CONFIG_DIR", configDir)
+	t.Setenv("AI_GUARDIAN_CONFIG_INLINE", "")
+	t.Setenv("AI_GUARDIAN_CONFIG_OVERLAY", "")
+	t.Setenv("AI_GUARDIAN_BIFROST_FAILURE_MODE", "")
+
+	action, ok := configuredScanErrorAction()
+	if !ok || action != "allow" {
+		t.Fatalf("configured action = %q, %v; want allow, true", action, ok)
 	}
 }
