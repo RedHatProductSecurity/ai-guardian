@@ -179,7 +179,7 @@ jobs:
           }
           EOF
           go work use "$loader_dir"
-          go build -mod=readonly -o "$loader_dir/plugin-loader" "$loader_dir"
+          go build -mod=readonly -trimpath -o "$loader_dir/plugin-loader" "$loader_dir"
           "$loader_dir/plugin-loader" "${MODULE_DIR}/dist/${{ matrix.artifact }}"
 
       - name: Upload CI artifact
