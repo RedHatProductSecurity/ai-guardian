@@ -185,7 +185,7 @@ upstream references. That guide is the source of truth for this summary.
 Licensed under [Apache-2.0][license]. Contributions are welcome; see the
 [Developer Guide][developer] and [Contributing Guide][contributing].
 
-For production use, install a stable release from PyPI. The `main` branch contains unreleased development code.
+For production use, install a stable release from PyPI. The `main` branch contains unreleased development code. An opt-in Early Bird channel publishes at most one eligible development build per UTC day; see the [Early Bird guide][early-bird] for `--pre`, pinning, provenance, and support boundaries.
 
 <!-- Absolute links also work when docs/index.md includes this README. -->
 [docs-index]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/README.md
@@ -227,6 +227,7 @@ For production use, install a stable release from PyPI. The `main` branch contai
 [openshell]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/OPENSHELL_MIDDLEWARE.md
 [kubernetes]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/kubernetes.md
 [tray]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md
+[early-bird]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/EARLY_BIRD.md
 [remote-broker]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/REMOTE_BROKER_ARCHITECTURE.md
 [hooks]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/HOOKS.md
 [observability]: https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/OBSERVABILITY.md

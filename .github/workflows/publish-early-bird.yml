@@ -1,0 +1,174 @@
+name: Publish Early Bird
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: early-bird-pypi
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish Early Bird package
+    if: github.ref == 'refs/heads/main' && vars.EARLY_BIRD_PAUSED != 'true'
+    runs-on: ubuntu-26.04
+    environment: early-bird-pypi
+    steps:
+      - name: Checkout immutable main commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Verify required checks for this SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+          REQUIRED_CHECKS: "Test Python 3.12 (ubuntu-26.04)|Pylint Code Quality|Black Code Formatting|Ruff Linting|Mypy Type Checking|Detection via Scan|Hook Pipeline|False Positive Check|Scenario Tests (standard)|Scenario Tests (strict)|Scenario Tests (minimal)"
+        run: |
+          python - <<'PY'
+          import json, os, subprocess, sys
+          raw = subprocess.check_output([
+              "gh", "api", f"repos/{os.environ['GITHUB_REPOSITORY']}/commits/{os.environ['SOURCE_SHA']}/check-runs"
+          ], text=True)
+          runs = json.loads(raw).get("check_runs", [])
+          by_name = {run.get("name"): run for run in runs}
+          missing = []
+          bad = []
+          for name in os.environ["REQUIRED_CHECKS"].split("|"):
+              run = by_name.get(name)
+              if not run:
+                  missing.append(name)
+              elif run.get("status") != "completed" or run.get("conclusion") != "success":
+                  bad.append(f"{name}: {run.get('status')}/{run.get('conclusion')}")
+          if missing or bad:
+              print(f"Required checks are not proven for {os.environ['SOURCE_SHA']}", file=sys.stderr)
+              print("Missing: " + ", ".join(missing), file=sys.stderr)
+              print("Not successful: " + ", ".join(bad), file=sys.stderr)
+              raise SystemExit(1)
+          PY
+
+      - name: Resolve immutable PyPI state and build number
+        id: version
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          python -m pip install --quiet packaging
+          python - <<'PY'
+          import io, json, os, re, urllib.request, zipfile
+          from pathlib import Path
+          from scripts.early_bird import development_base, next_dev_version
+          project = Path("pyproject.toml").read_text(encoding="utf-8")
+          current = re.search(r'(?m)^version\s*=\s*"([^"]+)"$', project).group(1)
+          base = development_base(current)
+          payload = json.load(urllib.request.urlopen("https://pypi.org/pypi/ai-guardian/json", timeout=30))
+          versions = list(payload.get("releases", {}))
+          for published in versions:
+              if not published.startswith(base + ".dev"):
+                  continue
+              for file in payload["releases"].get(published, []):
+                  if not file.get("filename", "").endswith(".whl"):
+                      continue
+                  archive = urllib.request.urlopen(file["url"], timeout=30).read()
+                  with zipfile.ZipFile(io.BytesIO(archive)) as wheel:
+                      try:
+                          provenance = wheel.read("ai_guardian/EARLY_BIRD_PROVENANCE").decode()
+                      except KeyError:
+                          continue
+                  if f"source_sha={os.environ['SOURCE_SHA']}" in provenance:
+                      raise SystemExit("This main SHA was already published to Early Bird")
+          candidate = next_dev_version(base, versions)
+          if candidate in versions:
+              raise SystemExit(f"Refusing already-published version {candidate}")
+          dates = [
+              file.get("upload_time_iso_8601", "")
+              for version in versions
+              for file in payload["releases"].get(version, [])
+              if version.startswith(base + ".dev")
+              and file.get("upload_time_iso_8601", "").startswith(__import__('datetime').date.today().isoformat())
+          ]
+          if dates:
+              raise SystemExit("An Early Bird build was already published today")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"base={base}\nversion={candidate}\n")
+          PY
+
+      - name: Build in an isolated tree
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          EARLY_BIRD_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          BUILD_PARENT="$(mktemp -d)"
+          export BUILD_ROOT="$BUILD_PARENT/tree"
+          python scripts/early_bird.py validate-ordering --base "${{ steps.version.outputs.base }}"
+          python -c 'from pathlib import Path; from scripts.early_bird import prepare_tree; import os; prepare_tree(Path("."), Path(os.environ["BUILD_ROOT"]), os.environ["EARLY_BIRD_VERSION"], os.environ["SOURCE_SHA"])' \
+            || { rm -rf "$BUILD_PARENT"; exit 1; }
+          python -m pip install --quiet build twine
+          python -m build --sdist --wheel "$BUILD_ROOT" --outdir dist
+          rm -rf "$BUILD_PARENT"
+          twine check dist/*
+          test "$(find dist -maxdepth 1 -type f | wc -l)" -ge 2
+
+      - name: Install and smoke-test exact validated distributions
+        run: |
+          python -m venv /tmp/early-bird-venv
+          /tmp/early-bird-venv/bin/python -m pip install --quiet dist/*.whl
+          /tmp/early-bird-venv/bin/python -c 'import ai_guardian; print(ai_guardian.__version__)'
+          unzip -p dist/*.whl ai_guardian/EARLY_BIRD_PROVENANCE
+
+      - name: Upload provenance and checksums
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          VERSION: ${{ steps.version.outputs.version }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          mkdir -p provenance
+          sha256sum dist/* > provenance/SHA256SUMS
+          python - <<'PY'
+          import json, os
+          with open("provenance/provenance.json", "w", encoding="utf-8") as file:
+              json.dump({
+                  "package": "ai-guardian",
+                  "version": os.environ["VERSION"],
+                  "source_sha": os.environ["SOURCE_SHA"],
+                  "workflow_run_id": os.environ["RUN_ID"],
+              }, file, indent=2)
+              file.write("\n")
+          PY
+      - name: Retain provenance and checksums
+        uses: actions/upload-artifact@v7
+        with:
+          name: early-bird-${{ steps.version.outputs.version }}-${{ github.sha }}
+          path: |
+            dist/*
+            provenance/*
+          if-no-files-found: error
+          retention-days: 365
+
+      - name: Publish validated files to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          skip-existing: false
+          verbose: true
+          print-hash: true
+
+      - name: Verify PyPI publication
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          data = json.load(urllib.request.urlopen(f"https://pypi.org/pypi/ai-guardian/{os.environ['VERSION']}/json", timeout=30))
+          files = data.get("urls", [])
+          if not files or not all(item.get("digests", {}).get("sha256") for item in files):
+              raise SystemExit("PyPI publication did not expose complete file checksums")
+          print("Verified", os.environ["VERSION"], "files:", len(files))
+          PY

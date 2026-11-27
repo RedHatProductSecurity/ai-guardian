@@ -29,6 +29,21 @@ pip install ai-guardian
 
 Avoid treating unreleased development code as a production installation. If you are evaluating the project from source, use a pinned release for the actual environment you want to protect.
 
+## Opt-in Early Bird builds
+
+To evaluate the newest eligible development package from official PyPI, use a
+separate virtual environment and opt in explicitly:
+
+```bash
+python -m pip install --upgrade --pre ai-guardian
+```
+
+Pip selects the highest compatible prerelease and may also select prerelease
+dependencies. Pin the exact `.devN` version for reproducibility, and return to
+a compatible final release by installing it without `--pre`. See the [Early
+Bird distribution guide](../EARLY_BIRD.md) for provenance, notifications,
+retention, pause behavior, and the separate native-artifact support boundary.
+
 ## Set up an agent
 
 Run setup for the AI coding tool you use. For example:
