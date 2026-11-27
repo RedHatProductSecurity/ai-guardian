@@ -122,4 +122,5 @@ To generate the static site locally on demand, run `mkdocs build`. The generated
 | [Contributing](../CONTRIBUTING.md) | Fork workflow, PR guidelines |
 | [Agent Instructions](../AGENTS.md) | Development guidelines, testing, CI/CD |
 | [Releasing](../RELEASING.md) | Release process and version management |
+| [Early Bird PyPI Builds](EARLY_BIRD.md) | Opt-in development distribution channel and provenance policy |
 | [Changelog](../CHANGELOG.md) | Version history |
