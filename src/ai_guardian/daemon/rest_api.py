@@ -19,6 +19,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from typing import Any, Optional
 
 from ai_guardian.daemon.rest_transport import create_server_context
+from ai_guardian.sdk import SecurityViolation
 
 logger = logging.getLogger(__name__)
 
@@ -1092,7 +1093,13 @@ class _RestHandler(BaseHTTPRequestHandler):
                 return "log" if action == "log" else "warn"
 
             if "secrets" in checks or "pii" in checks:
-                result = session.check_content(content, filename="input")
+                try:
+                    result = session.check_content(content, filename="input")
+                except SecurityViolation as exc:
+                    # The SDK raises SecurityViolation for a blocked finding;
+                    # REST must serialize that verdict instead of returning a
+                    # daemon-unavailable error to middleware clients.
+                    result = exc.result
                 if result.detected:
                     findings.append(
                         {
@@ -1275,6 +1282,37 @@ class _RestHandler(BaseHTTPRequestHandler):
                 }
             )
         except Exception as e:
+            blocked_result = getattr(e, "result", None)
+            if getattr(blocked_result, "blocked", False):
+                from ai_guardian.violations.decision import PolicyDecision
+
+                decision = PolicyDecision(
+                    event="rest_check",
+                    decision="block",
+                    reason="security finding detected",
+                    severity="warning",
+                    source="rest_api",
+                    agent="daemon",
+                ).to_dict()
+                self._send_json(
+                    {
+                        "clean": False,
+                        "blocked": True,
+                        "findings": [
+                            {
+                                "type": getattr(blocked_result, "violation_type", None),
+                                "message": getattr(blocked_result, "message", None),
+                                "should_block": True,
+                                "action_taken": "block",
+                                "policy_decision": decision,
+                            }
+                        ],
+                        "redacted": getattr(e, "sanitized_text", None),
+                        "elapsed_ms": round((_time.monotonic() - t0) * 1000, 1),
+                        "policy_decision": decision,
+                    }
+                )
+                return
             logger.error("Check endpoint failed: %s", e)
             self._send_error(500, "Internal error")
 
