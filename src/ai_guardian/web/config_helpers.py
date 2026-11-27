@@ -92,12 +92,9 @@ def get_current_daemon_version() -> Optional[str]:
     if target is None or _daemon_service is None:
         return None
     try:
-        status = _daemon_service.get_daemon_status(target)
+        version = _daemon_service.get_daemon_version(target)
     except Exception:
         return None
-    if not isinstance(status, dict):
-        return None
-    version = status.get("version")
     return version if isinstance(version, str) and version.strip() else None
 
 
