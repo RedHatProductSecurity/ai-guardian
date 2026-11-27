@@ -103,6 +103,15 @@ class DaemonService:
         except Exception:
             return None
 
+    def get_daemon_version(self, target: DaemonTarget) -> Optional[str]:
+        """Get a daemon version without relying on the stats response shape."""
+        if target.status in _NON_RUNNING_TARGET_STATES:
+            return None
+        try:
+            return self._client.get_version(target)
+        except Exception:
+            return None
+
     def get_daemon_about(self, target: DaemonTarget) -> Optional[dict]:
         """Get informational daemon metadata, including scanner inventory."""
         try:

@@ -108,6 +108,18 @@ class TestDaemonServiceStatus:
         assert service.get_daemon_status(mock_target) is None
         service._client.get_status.assert_not_called()
 
+    def test_get_daemon_version(self, service, mock_target):
+        service._client.get_version.return_value = "1.20.0"
+
+        assert service.get_daemon_version(mock_target) == "1.20.0"
+        service._client.get_version.assert_called_once_with(mock_target)
+
+    def test_get_daemon_version_respects_discovery_error(self, service, mock_target):
+        mock_target.status = "offline"
+
+        assert service.get_daemon_version(mock_target) is None
+        service._client.get_version.assert_not_called()
+
     def test_get_daemon_about(self, service, mock_target):
         service._client.get_about.return_value = {
             "installed_scanners": ["gitleaks", "leaktk"]

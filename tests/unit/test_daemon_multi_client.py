@@ -498,6 +498,45 @@ class TestContainerRouting:
             result = client.get_status(target)
             assert result == {"request_count": 50}
 
+    def test_version_prefers_status_endpoint(self):
+        client = MultiDaemonClient()
+        target = DaemonTarget(
+            name="test",
+            runtime="container",
+            host="127.0.0.1",
+            port=49200,
+            container_id="abc123def456abc123",
+            container_engine="podman",
+        )
+        with mock.patch.object(
+            client,
+            "_rest_request",
+            side_effect=[{"version": "1.20.0"}, {"version": "old"}],
+        ) as request:
+            assert client.get_version(target) == "1.20.0"
+        request.assert_called_once_with(target, "GET", "/api/status")
+
+    def test_version_falls_back_to_stats_for_older_daemon(self):
+        client = MultiDaemonClient()
+        target = DaemonTarget(
+            name="test",
+            runtime="container",
+            host="127.0.0.1",
+            port=49200,
+            container_id="abc123def456abc123",
+            container_engine="podman",
+        )
+        with mock.patch.object(
+            client,
+            "_rest_request",
+            side_effect=[{}, {"version": "1.19.0"}],
+        ) as request:
+            assert client.get_version(target) == "1.19.0"
+        assert [call.args for call in request.call_args_list] == [
+            (target, "GET", "/api/status"),
+            (target, "GET", "/api/stats"),
+        ]
+
     def test_pause_via_rest(self):
         client = MultiDaemonClient()
         target = DaemonTarget(

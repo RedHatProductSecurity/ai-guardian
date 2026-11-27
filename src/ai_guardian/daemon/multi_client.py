@@ -238,6 +238,30 @@ class MultiDaemonClient:
             return self._local_status(target)
         return self._rest_request(target, "GET", "/api/stats")
 
+    def get_version(self, target: DaemonTarget) -> Optional[str]:
+        """Get a daemon version from the stable status response.
+
+        Older daemons may only expose the version through their stats payload,
+        so retain that response as a compatibility fallback.
+        """
+        if target.runtime == "local":
+            responses = (self._local_status(target),)
+        else:
+            responses = (self._rest_request(target, "GET", "/api/status"),)
+        for response in responses:
+            if not isinstance(response, dict):
+                continue
+            version = response.get("version")
+            if isinstance(version, str) and version.strip():
+                return version
+        if target.runtime != "local":
+            response = self._rest_request(target, "GET", "/api/stats")
+            if isinstance(response, dict):
+                version = response.get("version")
+                if isinstance(version, str) and version.strip():
+                    return version
+        return None
+
     def send_pause(self, target: DaemonTarget, minutes: int) -> bool:
         """Pause daemon scanning."""
         if target.runtime == "local":

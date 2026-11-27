@@ -275,6 +275,9 @@ class _FakeService:
     def get_daemon_status(self, target):
         return {"version": "2.4.1"}
 
+    def get_daemon_version(self, target):
+        return "2.4.1"
+
 
 class TestIsRemoteTarget:
     """Tests for _is_remote_target helper."""
@@ -309,11 +312,11 @@ class TestCurrentDaemonVersion:
         assert get_current_daemon_version() == "2.4.1"
 
     def test_returns_none_when_status_has_no_version(self):
-        self._svc.get_daemon_status = MagicMock(return_value={})
+        self._svc.get_daemon_version = MagicMock(return_value=None)
         assert get_current_daemon_version() is None
 
     def test_returns_none_when_daemon_is_unavailable(self):
-        self._svc.get_daemon_status = MagicMock(return_value=None)
+        self._svc.get_daemon_version = MagicMock(return_value=None)
         assert get_current_daemon_version() is None
 
 
