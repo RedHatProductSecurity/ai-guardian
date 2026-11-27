@@ -10,13 +10,13 @@
     "go": "1.27.4"
   },
   "platforms": [
-    {"os": "linux", "architecture": "amd64", "priority": "high", "artifact": "ai-guardian-bifrost-v2.6.0-go1.27.4-linux-amd64.so"},
-    {"os": "linux", "architecture": "arm64", "priority": "high", "artifact": "ai-guardian-bifrost-v2.6.0-go1.27.4-linux-arm64.so"},
-    {"os": "darwin", "architecture": "arm64", "priority": "later", "artifact": "ai-guardian-bifrost-v2.6.0-go1.27.4-darwin-arm64.so"},
-    {"os": "darwin", "architecture": "amd64", "priority": "later", "artifact": "ai-guardian-bifrost-v2.6.0-go1.27.4-darwin-amd64.so"}
+    {"os": "linux", "architecture": "amd64", "libc": "glibc", "priority": "high", "artifact": "ai-guardian-bifrost-v2.6.0-go1.27.4-linux-amd64.so"},
+    {"os": "linux", "architecture": "arm64", "libc": "glibc", "priority": "high", "artifact": "ai-guardian-bifrost-v2.6.0-go1.27.4-linux-arm64.so"}
   ],
   "unsupported": [
-    {"os": "windows", "architecture": "amd64", "reason": "Go's native shared-object plugin mechanism is not supported"}
+    {"os": "windows", "architecture": "amd64", "reason": "Go's native shared-object plugin mechanism is not supported"},
+    {"os": "darwin", "architecture": "amd64", "reason": "Not currently built or load-tested in CI"},
+    {"os": "darwin", "architecture": "arm64", "reason": "Not currently built or load-tested in CI"}
   ],
   "runtime_requirements": [
     "Bifrost must be built with dynamic plugin loading enabled",

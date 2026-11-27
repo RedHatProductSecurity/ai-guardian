@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   failures during release dry-runs without checking authentication or contacting
   NotebookLM.
 ### Changed
+- **Bifrost middleware compatibility CI:** Build Linux plugin artifacts from a
+  shared Bifrost Go workspace, verify host/plugin loading for each architecture,
+  and monitor upstream transport releases monthly for compatibility review.
 - **Container build reliability:** Pin OpenClaw to the Node 22-compatible
   `2026.6.1` release instead of resolving an incompatible latest version.
 - **Release authorization hardening (#2846):** Enforce the fixed authorized

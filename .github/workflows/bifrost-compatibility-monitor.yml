@@ -1,0 +1,83 @@
+name: Bifrost Compatibility Monitor
+
+on:
+  schedule:
+    - cron: "0 9 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check-releases:
+    name: Check for newer Bifrost transport releases
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Compare supported version with upstream
+        id: compare
+        run: |
+          gh api repos/maximhq/bifrost/releases?per_page=100 > "${RUNNER_TEMP}/bifrost-releases.json"
+          python - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          metadata = json.loads(Path("go/bifrost-middleware/compatibility.json").read_text())
+          current = metadata["bifrost"]["version"]
+          releases = json.loads(Path(os.environ["RUNNER_TEMP"], "bifrost-releases.json").read_text())
+
+          def version(tag):
+              match = re.fullmatch(r"transports/v(\d+)\.(\d+)\.(\d+)", tag)
+              return tuple(map(int, match.groups())) if match else None
+
+          candidates = [(version(item["tag_name"]), item) for item in releases]
+          candidates = [(v, item) for v, item in candidates if v is not None]
+          if not candidates:
+              raise SystemExit("No stable Bifrost transport releases found")
+          latest_version, latest = max(candidates, key=lambda item: item[0])
+          current_version = tuple(map(int, current.split(".")))
+          newer = latest_version > current_version
+          output = os.environ["GITHUB_OUTPUT"]
+          with open(output, "a") as handle:
+              handle.write(f"newer={'true' if newer else 'false'}\n")
+              handle.write(f"latest={latest['tag_name']}\n")
+              handle.write(f"latest_url={latest['html_url']}\n")
+              handle.write(f"current={current}\n")
+          PY
+
+      - name: Open compatibility review issue
+        if: steps.compare.outputs.newer == 'true'
+        env:
+          LATEST: ${{ steps.compare.outputs.latest }}
+          LATEST_URL: ${{ steps.compare.outputs.latest_url }}
+          CURRENT: ${{ steps.compare.outputs.current }}
+        run: |
+          if gh issue list --state open --search "Bifrost compatibility review in:title" --json title --jq '.[].title' | grep -Fxq "Bifrost compatibility review: ${LATEST}"; then
+            echo "Issue already exists for ${LATEST}"
+            exit 0
+          fi
+          cat > "${RUNNER_TEMP}/bifrost-review.md" <<EOF
+          ## Review required
+
+          Upstream published [${LATEST}](${LATEST_URL}), newer than the currently supported Bifrost ${CURRENT}.
+
+          Review and, if compatible:
+
+          - [ ] Pin the Bifrost revision and Go toolchain in compatibility metadata.
+          - [ ] Add the Linux amd64 and arm64 plugin matrix artifacts.
+          - [ ] Verify dynamic host/plugin loading in CI for every architecture.
+          - [ ] Run middleware behavior tests, including allow, deny, and daemon-unavailable paths.
+          - [ ] Update compatibility documentation and release assets.
+
+          Do not update production artifacts or advertised support until the compatibility workflow passes.
+          EOF
+          gh issue create \
+            --title "Bifrost compatibility review: ${LATEST}" \
+            --label "enhancement" \
+            --body-file "${RUNNER_TEMP}/bifrost-review.md"

@@ -34,12 +34,13 @@ jobs:
         run: |
           python - <<'PY'
           import json
+          import os
           from pathlib import Path
 
           metadata = json.loads(Path("compatibility.json").read_text())
-          assert metadata["bifrost"]["version"] == "2.6.0"
-          assert metadata["bifrost"]["revision"] == "172617bb045c6f43d697843c115e64f0155ed143"
-          assert metadata["toolchain"]["go"] == "1.27.4"
+          assert metadata["bifrost"]["version"] == os.environ["BIFROST_VERSION"]
+          assert metadata["bifrost"]["revision"] == os.environ["BIFROST_REVISION"]
+          assert metadata["toolchain"]["go"] == os.environ["GO_VERSION"]
           assert metadata["bifrost"]["build_mode"] == "dynamic-plugin"
           assert not any(item["os"] == "windows" for item in metadata["platforms"])
           PY
@@ -89,15 +90,35 @@ jobs:
           test "$(python -c 'import json; print(json.load(open("compatibility.json"))["bifrost"]["version"])')" = "${BIFROST_VERSION}"
           grep -Fq "go ${GO_VERSION}" "${GITHUB_WORKSPACE}/.bifrost/core/go.mod"
 
-      - name: Bind plugin to pinned Bifrost core
-        working-directory: ${{ env.MODULE_DIR }}
+      - name: Create shared Bifrost workspace
         run: |
-          go mod edit -replace=github.com/maximhq/bifrost/core=${GITHUB_WORKSPACE}/.bifrost/core
-          go mod tidy
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["GITHUB_WORKSPACE"]) / ".bifrost"
+          modules = sorted(path.parent for path in root.rglob("go.mod"))
+          modules.append(Path(os.environ["GITHUB_WORKSPACE"]) / os.environ["MODULE_DIR"])
+          workspace = Path(os.environ["RUNNER_TEMP"]) / "bifrost-ai-guardian.work"
+          lines = [f"go {os.environ['GO_VERSION']}", "", "use ("]
+          lines.extend(f"\t{path}" for path in modules)
+          lines.append(")")
+          workspace.write_text("\n".join(lines) + "\n")
+          print(workspace)
+          PY
+
+      - name: Verify module graph is unchanged
+        working-directory: ${{ env.MODULE_DIR }}
+        env:
+          GOWORK: ${{ runner.temp }}/bifrost-ai-guardian.work
+        run: |
+          git diff --exit-code -- go.mod go.sum
 
       - name: Test plugin module
         working-directory: ${{ env.MODULE_DIR }}
-        run: go test ./...
+        env:
+          GOWORK: ${{ runner.temp }}/bifrost-ai-guardian.work
+        run: go test -mod=readonly ./...
 
       - name: Build shared object
         working-directory: ${{ env.MODULE_DIR }}
@@ -105,16 +126,55 @@ jobs:
           GOOS: linux
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: "1"
+          GOWORK: ${{ runner.temp }}/bifrost-ai-guardian.work
         run: |
           mkdir -p dist
-          go build -trimpath -buildmode=plugin -o "dist/${{ matrix.artifact }}" .
+          go build -mod=readonly -trimpath -buildmode=plugin -o "dist/${{ matrix.artifact }}" .
           file "dist/${{ matrix.artifact }}"
           sha256sum "dist/${{ matrix.artifact }}" > "dist/${{ matrix.artifact }}.sha256"
+
+      - name: Build and run plugin load smoke test
+        env:
+          GOWORK: ${{ runner.temp }}/bifrost-ai-guardian.work
+        run: |
+          loader_dir="${RUNNER_TEMP}/bifrost-plugin-loader"
+          mkdir -p "$loader_dir"
+          cat > "$loader_dir/go.mod" <<EOF
+          module bifrost-plugin-loader
+
+          go ${GO_VERSION}
+
+          require github.com/maximhq/bifrost/core v1.16.0
+          EOF
+          cat > "$loader_dir/main.go" <<'EOF'
+          package main
+
+          import (
+              "fmt"
+              "os"
+              "plugin"
+
+              _ "github.com/maximhq/bifrost/core/schemas"
+          )
+
+          func main() {
+              if len(os.Args) != 2 {
+                  panic("usage: plugin-loader plugin.so")
+              }
+              if _, err := plugin.Open(os.Args[1]); err != nil {
+                  panic(err)
+              }
+              fmt.Println("plugin load successful")
+          }
+          EOF
+          go work use "$loader_dir"
+          go build -mod=readonly -o "$loader_dir/plugin-loader" "$loader_dir"
+          "$loader_dir/plugin-loader" "${MODULE_DIR}/dist/${{ matrix.artifact }}"
 
       - name: Upload CI artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ai-guardian-bifrost-v2.6.0-go1.27.4-linux-${{ matrix.goarch }}
+          name: ai-guardian-bifrost-v${{ env.BIFROST_VERSION }}-go${{ env.GO_VERSION }}-linux-${{ matrix.goarch }}
           path: ${{ env.MODULE_DIR }}/dist/
           if-no-files-found: error
 
@@ -128,7 +188,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v8
         with:
-          pattern: ai-guardian-bifrost-v2.6.0-go1.27.4-linux-*
+          pattern: ai-guardian-bifrost-v${{ env.BIFROST_VERSION }}-go${{ env.GO_VERSION }}-linux-*
           path: release-assets
           merge-multiple: true
 
