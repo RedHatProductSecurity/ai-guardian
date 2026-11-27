@@ -678,8 +678,11 @@ class TestCheckEndpoint:
         req = Request(url, data=body, method="POST")
         req.add_header("Content-Type", "application/json")
 
-        with urlopen(req, timeout=5) as resp:
-            data = json.loads(resp.read())
+        with mock.patch(
+            "ai_guardian.violations.logger.ViolationLogger.log_violation"
+        ) as log_violation:
+            with urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read())
 
         assert data["clean"] is True
         assert data["blocked"] is False
@@ -688,6 +691,7 @@ class TestCheckEndpoint:
         assert data["reason_code"] == "middleware_paused"
         assert data["pause_source"] == "daemon"
         assert data["policy_decision"]["decision"] == "allow"
+        log_violation.assert_not_called()
 
     def test_status_exposes_middleware_pause_state(self, rest_api):
         api, port, state = rest_api

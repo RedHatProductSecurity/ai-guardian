@@ -1351,27 +1351,6 @@ class _RestHandler(BaseHTTPRequestHandler):
             project_dir or "",
             pause_status.get("remaining_seconds", 0),
         )
-        try:
-            from ai_guardian.violations.logger import ViolationLogger
-
-            ViolationLogger().log_violation(
-                "middleware_paused",
-                blocked={
-                    "reason_code": "middleware_paused",
-                    "pause": audit_state,
-                },
-                context={
-                    "ide_type": "openshell-middleware",
-                    "agent": "openshell",
-                    "project_dir": project_dir,
-                },
-                severity="warning",
-                policy_decision=decision,
-            )
-        except Exception:  # pragma: no cover - audit must not alter denial
-            logger.critical(
-                "Failed to persist middleware pause REST audit record", exc_info=True
-            )
         return {
             "clean": True,
             "blocked": False,
