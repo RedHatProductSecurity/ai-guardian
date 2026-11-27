@@ -57,9 +57,13 @@ jobs:
       matrix:
         include:
           - goarch: amd64
+            goamd64: v1
+            goarm64: ""
             runner: ubuntu-24.04
             artifact: ai-guardian-bifrost-v2.6.0-go1.27.4-linux-amd64.so
           - goarch: arm64
+            goamd64: ""
+            goarm64: v8.0
             runner: ubuntu-24.04-arm
             artifact: ai-guardian-bifrost-v2.6.0-go1.27.4-linux-arm64.so
     steps:
@@ -127,6 +131,8 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: "1"
           GOWORK: ${{ runner.temp }}/bifrost-ai-guardian.work
+          GOAMD64: ${{ matrix.goamd64 }}
+          GOARM64: ${{ matrix.goarm64 }}
         run: |
           mkdir -p dist
           go build -mod=readonly -trimpath -buildmode=plugin -o "dist/${{ matrix.artifact }}" .
@@ -139,6 +145,8 @@ jobs:
           GOOS: linux
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: "1"
+          GOAMD64: ${{ matrix.goamd64 }}
+          GOARM64: ${{ matrix.goarm64 }}
         run: |
           loader_dir="${RUNNER_TEMP}/bifrost-plugin-loader"
           mkdir -p "$loader_dir"
