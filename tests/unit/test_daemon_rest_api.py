@@ -833,6 +833,34 @@ class TestCheckEndpoint:
         assert data["policy_decision"]["decision"] == "block"
         assert data["findings"][0]["policy_decision"]["decision"] == "block"
 
+    def test_post_check_serializes_sdk_blocked_exception(self, rest_api):
+        api, port, state = rest_api
+        from ai_guardian.sdk import CheckResult, SecurityViolation
+
+        url = f"http://127.0.0.1:{port}/api/check"
+        violation = SecurityViolation(
+            CheckResult(
+                blocked=True,
+                detected=True,
+                violation_type="secret_detected",
+                message="synthetic secret detected",
+            )
+        )
+        with mock.patch(
+            "ai_guardian.sdk._DirectSession.check_content",
+            side_effect=violation,
+        ):
+            body = json.dumps({"content": "ghp_abc123"}).encode("utf-8")
+            req = Request(url, data=body, method="POST")
+            req.add_header("Content-Type", "application/json")
+            with urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read())
+
+        assert data["clean"] is False
+        assert data["blocked"] is True
+        assert data["findings"][0]["type"] == "secret_detected"
+        assert data["policy_decision"]["decision"] == "block"
+
     def test_post_check_preserves_warn_only_scanner_action(self, rest_api):
         api, port, state = rest_api
         with mock.patch(
