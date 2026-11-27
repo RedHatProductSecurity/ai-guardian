@@ -26,12 +26,14 @@ def test_bifrost_metadata_keeps_windows_out_of_native_plugin_artifacts():
         {
             "os": "linux",
             "architecture": "amd64",
+            "libc": "glibc",
             "priority": "high",
             "artifact": "ai-guardian-bifrost-v2.6.0-go1.27.4-linux-amd64.so",
         },
         {
             "os": "linux",
             "architecture": "arm64",
+            "libc": "glibc",
             "priority": "high",
             "artifact": "ai-guardian-bifrost-v2.6.0-go1.27.4-linux-arm64.so",
         },
