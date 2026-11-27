@@ -136,6 +136,9 @@ jobs:
       - name: Build and run plugin load smoke test
         env:
           GOWORK: ${{ runner.temp }}/bifrost-ai-guardian.work
+          GOOS: linux
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "1"
         run: |
           loader_dir="${RUNNER_TEMP}/bifrost-plugin-loader"
           mkdir -p "$loader_dir"
