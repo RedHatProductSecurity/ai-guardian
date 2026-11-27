@@ -12,6 +12,33 @@ import (
 	"testing"
 )
 
+func TestConfiguredScanErrorActionUsesPolicyPrecedence(t *testing.T) {
+	configDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(configDir, "ai-guardian.json"), []byte(`{"on_scan_error":"block"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("AI_GUARDIAN_CONFIG_DIR", configDir)
+	t.Setenv("AI_GUARDIAN_HOME", "")
+	t.Setenv("XDG_CONFIG_HOME", "")
+	t.Setenv("AI_GUARDIAN_CONFIG_OVERLAY", "")
+	t.Setenv("AI_GUARDIAN_CONFIG_INLINE", `{"on_scan_error":"allow"}`)
+	t.Setenv("AI_GUARDIAN_BIFROST_FAILURE_MODE", "")
+	action, ok := configuredScanErrorAction()
+	if !ok || action != "allow" {
+		t.Fatalf("inline policy = (%q, %v), want allow", action, ok)
+	}
+	overlay := filepath.Join(t.TempDir(), "overlay.json")
+	if err := os.WriteFile(overlay, []byte(`{"on_scan_error":"block"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("AI_GUARDIAN_CONFIG_INLINE", "")
+	t.Setenv("AI_GUARDIAN_CONFIG_OVERLAY", overlay)
+	action, ok = configuredScanErrorAction()
+	if !ok || action != "block" {
+		t.Fatalf("overlay policy = (%q, %v), want block", action, ok)
+	}
+}
+
 func TestDaemonClientHTTPCheckUsesBoundedSecurityRequest(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/api/check" {

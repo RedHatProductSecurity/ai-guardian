@@ -342,7 +342,7 @@ bounded byte counts, decision, reason code, and audit-safe finding summaries.
 | Automatic memory generation | LLM hook path | Candidate coverage; verify independent background client configuration | Validate, then yes |
 | Non-streaming response | `PostLLMHook` | Suitable for pre-delivery inspection if no earlier commitment | Yes |
 | Streaming response | transport chunk/header hooks | Bifrost pause/resume gate buffers chunks until the bounded assembled response is inspected; denied buffers are cleared before termination | Supported with bounded end-of-stream inspection; delivery begins after the final decision |
-| Native realtime/WebSocket | setup/session hooks | Unverified; HTTP setup hook alone does not cover frames | Defer |
+| Native realtime/WebSocket | setup/session hooks | No verified v2.6.0 frame hook; HTTP setup alone does not cover frames | Unsupported; fail closed until adapter/harness proof |
 | ChatGPT OAuth passthrough | transport/auth path | Unverified; must prove credentials are never sent to daemon and content still reaches gate | Defer |
 | Gateway MCP operations | `PreMCPHook` / `PostMCPHook` | Separate surface; requires explicit tool/argument/result policy mapping | Defer |
 | Provider retry/fallback | per-attempt `PreLLMHook` | Must be tested as a security invariant | Yes |
@@ -369,6 +369,23 @@ Fail-open may be offered only as an explicit, separately documented monitoring
 mode (`AI_GUARDIAN_BIFROST_FAILURE_MODE=fail_open`). It is not acceptable as
 the default for a security-enforcing profile and must never turn an explicit
 security denial into a provider retry.
+
+### Realtime/WebSocket enforcement boundary
+
+The current Bifrost plugin does not claim native realtime/WebSocket coverage.
+The v2.6.0 compatibility target verifies the HTTP and LLM hook surface, but it
+does not establish that an upgrade hook observes the complete session or that
+frame decisions occur before delivery. Therefore the native realtime path is
+unsupported rather than implicitly allowed.
+
+The Go middleware includes a bounded `webSocketSession` contract for a future
+adapter. A compliant adapter must gate the upgrade, inspect complete text
+frames in sequence, and release no frame before an allow decision. Per-session
+state is bounded to 256 messages, the configured payload size, and five minutes
+of inactivity. Query data is stripped before daemon inspection. Binary frames,
+malformed input, cancellation, expiry, daemon failure, malformed verdicts, and
+explicit denials terminate the session. Explicit security denials remain
+terminal regardless of failure-open policy.
 
 ## Deployment Modes
 
