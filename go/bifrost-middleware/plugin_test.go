@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/maximhq/bifrost/core/schemas"
 )
@@ -71,5 +73,56 @@ func TestDaemonFailureCanBeExplicitlyFailOpen(t *testing.T) {
 	}
 	if shortCircuit != nil {
 		t.Fatal("explicit fail-open mode should not short-circuit daemon unavailability")
+	}
+}
+
+func TestHTTPTransportStreamChunkHookBlocksBeforeDelivery(t *testing.T) {
+	chunk := &schemas.BifrostStreamChunk{
+		BifrostChatResponse: &schemas.BifrostChatResponse{Object: "chat.completion.chunk"},
+	}
+
+	result, err := HTTPTransportStreamChunkHook(nil, nil, chunk)
+	if result != nil {
+		t.Fatal("streaming content must not be returned before inspection")
+	}
+	assertStreamError(t, err, "ai_guardian_stream_unsupported")
+}
+
+func TestHTTPTransportStreamChunkHookDoesNotEmitSplitUTF8Fragments(t *testing.T) {
+	ctx := schemas.NewBifrostContext(context.Background(), time.Time{})
+	defer ctx.Cancel()
+	chunks := []*schemas.BifrostStreamChunk{
+		{BifrostChatResponse: &schemas.BifrostChatResponse{Object: "chat.completion.chunk"}},
+		{BifrostChatResponse: &schemas.BifrostChatResponse{Object: "chat.completion.chunk"}},
+	}
+
+	for _, chunk := range chunks {
+		result, err := HTTPTransportStreamChunkHook(ctx, nil, chunk)
+		if result != nil {
+			t.Fatal("split UTF-8 content must not be emitted")
+		}
+		assertStreamError(t, err, "ai_guardian_stream_unsupported")
+	}
+}
+
+func TestHTTPTransportStreamChunkHookStopsOnCancellation(t *testing.T) {
+	ctx := schemas.NewBifrostContext(context.Background(), time.Time{})
+	ctx.Cancel()
+
+	result, err := HTTPTransportStreamChunkHook(ctx, nil, &schemas.BifrostStreamChunk{})
+	if result != nil {
+		t.Fatal("cancelled stream must not emit a chunk")
+	}
+	assertStreamError(t, err, "ai_guardian_stream_cancelled")
+}
+
+func assertStreamError(t *testing.T, err error, code string) {
+	t.Helper()
+	interception, ok := err.(*schemas.StreamInterceptionError)
+	if !ok || interception.BifrostError == nil || interception.BifrostError.Error == nil || interception.BifrostError.Error.Code == nil {
+		t.Fatalf("error = %#v, want structured stream interception error", err)
+	}
+	if *interception.BifrostError.Error.Code != code {
+		t.Fatalf("error code = %q, want %q", *interception.BifrostError.Error.Code, code)
 	}
 }

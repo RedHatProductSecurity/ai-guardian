@@ -341,7 +341,7 @@ bounded byte counts, decision, reason code, and audit-safe finding summaries.
 | Codebase indexing | Embedding hook path | Candidate coverage; verify Kilo request path reaches Bifrost | Yes if path is covered |
 | Automatic memory generation | LLM hook path | Candidate coverage; verify independent background client configuration | Validate, then yes |
 | Non-streaming response | `PostLLMHook` | Suitable for pre-delivery inspection if no earlier commitment | Yes |
-| Streaming response | transport chunk/header hooks | Partial/unverified; chunk-local inspection cannot establish whole-response safety | Defer or fail closed |
+| Streaming response | transport chunk/header hooks | Bifrost pause/resume gate buffers chunks until the bounded assembled response is inspected; denied buffers are cleared before termination | Supported with bounded end-of-stream inspection; delivery begins after the final decision |
 | Native realtime/WebSocket | setup/session hooks | Unverified; HTTP setup hook alone does not cover frames | Defer |
 | ChatGPT OAuth passthrough | transport/auth path | Unverified; must prove credentials are never sent to daemon and content still reaches gate | Defer |
 | Gateway MCP operations | `PreMCPHook` / `PostMCPHook` | Separate surface; requires explicit tool/argument/result policy mapping | Defer |
@@ -355,7 +355,7 @@ Coverage labels mean: **Supported** is source and harness verified;
 
 | Condition | Required behavior |
 | --- | --- |
-| Daemon unavailable or timeout | Deny before provider call or response delivery |
+| Daemon unavailable or timeout | Deny before provider call or response delivery in the default `fail_closed` mode; explicit `fail_open` monitoring mode may resume the held stream |
 | Authentication/TLS failure | Deny; do not fall back to another daemon or provider |
 | Invalid verdict or replacement | Deny and record a protocol-error audit event |
 | Explicit security block | Terminal denial; no provider fallback |
@@ -366,8 +366,9 @@ Coverage labels mean: **Supported** is source and harness verified;
 | Plugin unavailable/disabled | Existing AI Guardian agent-only deployments remain independent; middleware-only mode must not advertise protection |
 
 Fail-open may be offered only as an explicit, separately documented monitoring
-mode. It is not acceptable as the default for a security-enforcing profile and
-must never turn a security denial into a provider retry.
+mode (`AI_GUARDIAN_BIFROST_FAILURE_MODE=fail_open`). It is not acceptable as
+the default for a security-enforcing profile and must never turn an explicit
+security denial into a provider retry.
 
 ## Deployment Modes
 
@@ -398,8 +399,10 @@ Bifrost and the Broker are optional. Installing or removing the plugin must not
 
 ### Separate follow-ups
 
-- Qualify streaming whole-response buffering or a daemon-compatible streaming
-  state protocol.
+- Qualify a daemon-compatible incremental streaming state protocol. The native
+  stream-chunk hook currently uses Bifrost's bounded pause/resume gate, so clean
+  streams are delivered after final inspection and denied buffers are cleared
+  before termination.
 - Qualify native realtime/WebSocket session and frame hooks.
 - Qualify OAuth passthrough and provider-native passthrough surfaces.
 - Define gateway MCP request/result policy mapping.

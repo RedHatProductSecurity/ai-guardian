@@ -95,6 +95,72 @@ func PostLLMHook(_ *schemas.BifrostContext, response *schemas.BifrostResponse, b
 	return response, nil, nil
 }
 
+// HTTPTransportStreamChunkHook holds chunks in Bifrost's pause/resume gate and
+// evaluates the assembled response only when the stream is complete. This
+// avoids releasing a fragment before a finding that spans chunks is known.
+func HTTPTransportStreamChunkHook(ctx *schemas.BifrostContext, _ *schemas.HTTPRequest, chunk *schemas.BifrostStreamChunk) (*schemas.BifrostStreamChunk, error) {
+	if ctx != nil && ctx.Err() != nil {
+		return nil, streamDenyError("ai_guardian_stream_cancelled", "AI Guardian streaming inspection cancelled")
+	}
+	if chunk == nil {
+		return nil, streamDenyError("ai_guardian_stream_error", "AI Guardian received an invalid stream chunk")
+	}
+	if chunk.BifrostError != nil {
+		if ctx != nil {
+			ctx.ResumeStream()
+		}
+		return chunk, nil
+	}
+	if ctx == nil {
+		return nil, streamDenyError("ai_guardian_stream_unsupported", "AI Guardian requires a Bifrost stream gate")
+	}
+	if _, ok := ctx.Value(schemas.BifrostContextKeyTracer).(schemas.Tracer); !ok {
+		return nil, streamDenyError("ai_guardian_stream_unsupported", "AI Guardian requires a Bifrost stream gate")
+	}
+	if traceID, _ := ctx.Value(schemas.BifrostContextKeyTraceID).(string); traceID == "" {
+		return nil, streamDenyError("ai_guardian_stream_unsupported", "AI Guardian requires a Bifrost stream identity")
+	}
+	if !ctx.IsStreamPaused() {
+		ctx.PauseStream()
+		if !ctx.IsStreamPaused() {
+			return nil, streamDenyError("ai_guardian_stream_unsupported", "AI Guardian requires an active Bifrost stream gate")
+		}
+	}
+	final, _ := ctx.Value(schemas.BifrostContextKeyStreamEndIndicator).(bool)
+	if !final {
+		return chunk, nil
+	}
+	client, err := currentClient()
+	if err != nil {
+		return denyStream(ctx, "ai_guardian_unavailable", "AI Guardian daemon unavailable")
+	}
+	response := ctx.GetAccumulatedResponse()
+	content, err := marshalResponse(response)
+	if err != nil {
+		return denyStream(ctx, "ai_guardian_response_error", err.Error())
+	}
+	verdict, err := client.check(content)
+	if err != nil {
+		if !client.failClosed {
+			ctx.ResumeStream()
+			return chunk, nil
+		}
+		return denyStream(ctx, "ai_guardian_unavailable", "AI Guardian daemon unavailable")
+	}
+	if err := validateVerdict(verdict); err != nil {
+		if !client.failClosed {
+			ctx.ResumeStream()
+			return chunk, nil
+		}
+		return denyStream(ctx, "ai_guardian_invalid_verdict", err.Error())
+	}
+	if verdict.Blocked || verdict.Redacted != "" {
+		return denyStream(ctx, "ai_guardian_denied", "AI Guardian denied the response")
+	}
+	ctx.ResumeStream()
+	return chunk, nil
+}
+
 func currentClient() (*daemonClient, error) {
 	if activeClient != nil {
 		return activeClient, nil
@@ -184,4 +250,16 @@ func denyError(code, message string) *schemas.BifrostError {
 		Error:          &schemas.ErrorField{Type: &typeValue, Code: &codeValue, Message: message},
 		AllowFallbacks: &allowFallbacks,
 	}
+}
+
+func streamDenyError(code, message string) error {
+	return &schemas.StreamInterceptionError{BifrostError: denyError(code, message)}
+}
+
+func denyStream(ctx *schemas.BifrostContext, code, message string) (*schemas.BifrostStreamChunk, error) {
+	if err := ctx.ClearPausedStreamBuffer(); err != nil {
+		return nil, streamDenyError("ai_guardian_stream_error", err.Error())
+	}
+	ctx.EndStream(denyError(code, message))
+	return nil, streamDenyError(code, message)
 }
