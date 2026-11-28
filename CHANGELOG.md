@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   failures during release dry-runs without checking authentication or contacting
   NotebookLM.
 ### Changed
+- **Shared middleware contract (#2898):** Define the versioned `ai-guardian.middleware`
+  v1 semantics and reusable allow, deny, pause, failure, and sensitive-field
+  exclusion fixtures for OpenShell and Bifrost adapters. Document capability
+  discovery and gateway-specific boundaries.
 - **Bifrost middleware compatibility CI:** Build Linux plugin artifacts from a
   shared Bifrost Go workspace, verify host/plugin loading for each architecture,
   and monitor upstream transport releases monthly for compatibility review.

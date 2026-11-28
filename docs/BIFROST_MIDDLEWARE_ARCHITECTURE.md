@@ -1,5 +1,9 @@
 # AI Guardian Middleware for Bifrost
 
+> Shared semantic contract: [MIDDLEWARE_CONTRACT.md](MIDDLEWARE_CONTRACT.md)
+> (`ai-guardian.middleware` v1). This document describes Bifrost-specific
+> hook, plugin, and commitment-boundary behavior.
+
 **Issue:** #2862 (architecture spike); implementation follow-up: #2861  
 **Status:** Discovery baseline for implementation planning  
 **Updated:** 2026-11-25
@@ -424,9 +428,10 @@ Bifrost and the Broker are optional. Installing or removing the plugin must not
 - Qualify OAuth passthrough and provider-native passthrough surfaces.
 - Qualify MCP connection setup, OAuth credential exchange, and provider-native
   passthrough paths that bypass the generic `PreMCPHook`/`PostMCPHook` surface.
-- Add a shared, versioned middleware contract only if OpenShell and Bifrost
-  implementations demonstrate a stable common semantic need. Do not refactor
-  OpenShell as part of #2861.
+- The shared, versioned middleware semantics are now defined in
+  [MIDDLEWARE_CONTRACT.md](MIDDLEWARE_CONTRACT.md) and covered by reusable
+  fixtures. This is a data contract, not a generalized adapter framework; do
+  not refactor OpenShell as part of #2861.
 - Define Broker integration only through #2640 boundaries; do not make Broker a
   Bifrost prerequisite.
 

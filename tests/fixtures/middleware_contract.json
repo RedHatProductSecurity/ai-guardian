@@ -1,0 +1,39 @@
+{
+  "contract": "ai-guardian.middleware",
+  "version": 1,
+  "cases": [
+    {
+      "name": "allow",
+      "daemon": {"clean": true, "blocked": false},
+      "expected": {"decision": "allow"}
+    },
+    {
+      "name": "deny",
+      "daemon": {"clean": false, "blocked": true, "reason_code": "policy_denied"},
+      "expected": {"decision": "deny", "terminal": true}
+    },
+    {
+      "name": "pause",
+      "daemon": {"clean": true, "blocked": false, "paused": true, "reason_code": "middleware_paused"},
+      "expected": {"decision": "paused", "decision_is_daemon_authoritative": true}
+    },
+    {
+      "name": "daemon_unavailable",
+      "daemon_error": "unavailable",
+      "expected": {"decision": "deny", "failure": true}
+    },
+    {
+      "name": "malformed_verdict",
+      "daemon": {"clean": false, "blocked": false},
+      "expected": {"decision": "deny", "failure": true}
+    },
+    {
+      "name": "sensitive_field_exclusion",
+      "request": {
+        "content": {"text": "safe content", "authorization": "must-not-cross-boundary", "api_key": "must-not-cross-boundary"},
+        "sanitized_content": {"text": "safe content"}
+      },
+      "expected": {"sensitive_fields_excluded": true}
+    }
+  ]
+}

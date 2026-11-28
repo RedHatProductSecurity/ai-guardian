@@ -174,3 +174,42 @@ pub(super) async fn evaluate(
         },
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::Value;
+
+    #[test]
+    fn shared_contract_fixture_covers_daemon_outcomes() {
+        let fixture: Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/middleware_contract.json"
+        ))
+        .expect("shared middleware fixture must be valid JSON");
+        assert_eq!(fixture["contract"], "ai-guardian.middleware");
+        assert_eq!(fixture["version"], 1);
+        let cases = fixture["cases"].as_array().expect("fixture cases");
+        for case in cases {
+            let name = case["name"].as_str().expect("fixture case name");
+            match name {
+                "allow" => assert!(!response_has_blocking_findings(
+                    &serde_json::from_value(case["daemon"].clone()).expect("allow verdict")
+                )),
+                "deny" => assert!(response_has_blocking_findings(
+                    &serde_json::from_value(case["daemon"].clone()).expect("deny verdict")
+                )),
+                "pause" => {
+                    let response: CheckResponse =
+                        serde_json::from_value(case["daemon"].clone()).expect("pause verdict");
+                    assert!(response.paused);
+                    assert!(!paused_evaluation(response).blocked);
+                }
+                "malformed_verdict" => assert!(response_has_blocking_findings(
+                    &serde_json::from_value(case["daemon"].clone()).expect("malformed verdict")
+                )),
+                "daemon_unavailable" | "sensitive_field_exclusion" => {}
+                other => panic!("unhandled shared fixture {other}"),
+            }
+        }
+    }
+}
