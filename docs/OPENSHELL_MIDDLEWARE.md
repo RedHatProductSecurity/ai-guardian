@@ -1,5 +1,9 @@
 # OpenShell Supervisor Middleware
 
+> Shared semantic contract: [MIDDLEWARE_CONTRACT.md](MIDDLEWARE_CONTRACT.md)
+> (`ai-guardian.middleware` v1). This document describes OpenShell-specific
+> protocol and deployment behavior.
+
 AI Guardian's OpenShell middleware is an **external Rust supervisor service**.
 It is not an `ai-guardian` subcommand and it is not part of sandbox creation.
 OpenShell-savvy operators manage the service, gateway registration, and policy

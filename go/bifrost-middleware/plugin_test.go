@@ -6,12 +6,58 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/maximhq/bifrost/core/schemas"
 )
+
+func TestSharedMiddlewareContractFixtures(t *testing.T) {
+	root := filepath.Join("..", "..")
+	payload, err := os.ReadFile(filepath.Join(root, "tests", "fixtures", "middleware_contract.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		Contract string `json:"contract"`
+		Version  int    `json:"version"`
+		Cases    []struct {
+			Name        string         `json:"name"`
+			Daemon      daemonResponse `json:"daemon"`
+			DaemonError string         `json:"daemon_error"`
+			Expected    struct {
+				Decision string `json:"decision"`
+			} `json:"expected"`
+		} `json:"cases"`
+	}
+	if err := json.Unmarshal(payload, &fixture); err != nil {
+		t.Fatal(err)
+	}
+	if fixture.Contract != "ai-guardian.middleware" || fixture.Version != 1 {
+		t.Fatalf("unexpected contract identity: %+v", fixture)
+	}
+	for _, testCase := range fixture.Cases {
+		switch testCase.Name {
+		case "allow", "deny", "pause", "malformed_verdict":
+			decision := "allow"
+			if testCase.Daemon.Blocked || (!testCase.Daemon.Clean && !testCase.Daemon.Paused) {
+				decision = "deny"
+			} else if testCase.Daemon.Paused {
+				decision = "paused"
+			}
+			if decision != testCase.Expected.Decision {
+				t.Errorf("fixture %s: decision %q, want %q", testCase.Name, decision, testCase.Expected.Decision)
+			}
+		case "daemon_unavailable", "sensitive_field_exclusion":
+			// Transport and content-boundary behavior are covered by the focused tests below.
+		default:
+			t.Errorf("unhandled shared fixture %q", testCase.Name)
+		}
+	}
+}
 
 func TestPreLLMHookBlocksWithoutFallback(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {

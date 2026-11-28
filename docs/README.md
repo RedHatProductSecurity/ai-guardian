@@ -36,6 +36,7 @@ To generate the static site locally on demand, run `mkdocs build`. The generated
 | [Support bundles](SUPPORT.md) | Reviewed public GitHub Discussions, restricted categories, legacy export, and safe retries |
 | [OpenShell Supervisor Middleware](OPENSHELL_MIDDLEWARE.md) | External Rust service managed by OpenShell gateway registration and policy |
 | [Bifrost Middleware Architecture](BIFROST_MIDDLEWARE_ARCHITECTURE.md) | Architecture, compatibility boundary, coverage matrix, and enforcement contracts for the optional Bifrost plugin |
+| [Shared Middleware Contract](MIDDLEWARE_CONTRACT.md) | Versioned daemon verdict, failure, payload-safety, and capability semantics shared by OpenShell and Bifrost |
 | [Bifrost Compatibility](BIFROST_COMPATIBILITY.md) | Demonstrated agent configurations, validation results, security boundaries, and unverified surfaces |
 
 ## Security Features

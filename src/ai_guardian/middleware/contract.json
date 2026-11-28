@@ -1,0 +1,42 @@
+{
+  "contract": "ai-guardian.middleware",
+  "version": 1,
+  "request": {
+    "required": ["content", "checks", "action", "correlation_id"],
+    "action": "block",
+    "optional": ["project_dir"],
+    "sensitive_fields_excluded": true
+  },
+  "verdicts": {
+    "allow": {"clean": true, "blocked": false, "paused": false},
+    "deny": {"blocked": true},
+    "paused": {"paused": true, "blocked": false},
+    "redaction": "redacted is an optional complete replacement, never a partial patch"
+  },
+  "failure": {
+    "configuration": "on_scan_error",
+    "values": ["allow", "block"],
+    "default": "block",
+    "explicit_daemon_denial_always": "block",
+    "malformed_verdict": "configuration",
+    "unavailable_daemon": "configuration"
+  },
+  "capability_discovery": {
+    "required": true,
+    "unsupported_paths_must_be_explicit": true
+  },
+  "adapters": {
+    "openshell": {
+      "allow": "protocol allow or response pass-through",
+      "deny": "protocol deny or block delivery",
+      "paused": "protocol skip with pause metadata",
+      "redaction": "protocol transform"
+    },
+    "bifrost": {
+      "allow": "hook continues or stream resumes",
+      "deny": "terminal security short-circuit or stream termination",
+      "paused": "hook continues without scanning",
+      "redaction": "atomic response replacement when the hook supports it"
+    }
+  }
+}
