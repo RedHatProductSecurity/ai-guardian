@@ -5,6 +5,27 @@
 **Validation status:** demonstrated compatibility only; this is not a certification
 of every Bifrost provider, API, or deployment mode.
 
+## Release Readiness Runtime Gate
+
+Release Readiness invokes the reusable
+`.github/workflows/bifrost-runtime-contract.yml` workflow on one canonical Linux
+amd64 tuple. The workflow runs inside the pinned `golang:1.27.4-bookworm`
+runtime image, checks the matching dynamic plugin load, and executes the local
+mock-daemon/provider contract tests. The test lane covers:
+
+- clean allow and explicit daemon denial, including terminal 403 behavior;
+- paused-daemon pass-through without a persisted violation;
+- daemon-unavailable behavior in fail-open and fail-closed modes;
+- buffered streaming enforcement and cancellation/failure handling;
+- provider-native credential isolation; and
+- supported MCP request, argument, and result enforcement.
+
+The workflow publishes only a value-free JSON test summary. Detailed synthetic
+payloads remain inside the ephemeral runner. The architecture-specific
+`bifrost-middleware.yml` matrix remains the authority for Linux amd64/arm64
+artifact builds and dynamic host/plugin loading; this runtime gate does not
+replace that matrix or claim unsupported Bifrost versions and platforms.
+
 ## Scope and Architecture
 
 Bifrost is an inference gateway, not an AI coding-agent host. The existing AI
