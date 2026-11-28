@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -29,6 +31,66 @@ func TestPreLLMHookBlocksWithoutFallback(t *testing.T) {
 	}
 	if shortCircuit.Error.AllowFallbacks == nil || *shortCircuit.Error.AllowFallbacks {
 		t.Fatal("security denial must disable provider fallback")
+	}
+}
+
+func TestPreLLMHookExcludesOAuthFieldsFromDaemonPayload(t *testing.T) {
+	const accessToken = "oauth-access-token-must-not-leak"
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		body, err := io.ReadAll(request.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload := string(body)
+		for _, secret := range []string{accessToken, "refresh-token-must-not-leak", "provider-api-key-must-not-leak", "session-cookie-must-not-leak"} {
+			if strings.Contains(payload, secret) {
+				t.Fatalf("credential %q leaked into daemon payload: %s", secret, payload)
+			}
+		}
+		if !strings.Contains(payload, "safe user content") {
+			t.Fatalf("safe content missing from daemon payload: %s", payload)
+		}
+		_, _ = writer.Write([]byte(`{"clean":true}`))
+	}))
+	defer server.Close()
+
+	activeClient = &daemonClient{url: server.URL, token: "daemon-token", maxPayload: 4096, httpClient: server.Client()}
+	defer func() { activeClient = nil }()
+	content := "safe user content"
+	request := &schemas.BifrostRequest{ChatRequest: &schemas.BifrostChatRequest{
+		Model: "test-model",
+		Input: []schemas.ChatMessage{{Content: &schemas.ChatMessageContent{ContentStr: &content}}},
+		Params: &schemas.ChatParameters{MCPServers: []schemas.ChatMCPServer{{
+			URL:                "https://mcp.example",
+			AuthorizationToken: stringPtr(accessToken),
+		}}},
+	}}
+	_, shortCircuit, err := PreLLMHook(nil, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if shortCircuit != nil {
+		t.Fatalf("safe request was denied: %+v", shortCircuit)
+	}
+}
+
+func TestSanitizeJSONRemovesCredentialFieldVariants(t *testing.T) {
+	value := map[string]any{
+		"content":          "safe",
+		"Authorization":    "authorization-secret",
+		"refresh_token":    "refresh-secret",
+		"provider-api-key": "provider-secret",
+		"nested":           map[string]any{"cookie": "cookie-secret", "text": "safe"},
+		"items":            []any{map[string]any{"accessToken": "access-secret"}},
+	}
+	payload := string(sanitizeJSON(value))
+	for _, secret := range []string{"authorization-secret", "refresh-secret", "provider-secret", "cookie-secret", "access-secret"} {
+		if strings.Contains(payload, secret) {
+			t.Fatalf("credential %q leaked into sanitized payload: %s", secret, payload)
+		}
+	}
+	if !strings.Contains(payload, "safe") {
+		t.Fatalf("safe content missing from sanitized payload: %s", payload)
 	}
 }
 
@@ -126,3 +188,5 @@ func assertStreamError(t *testing.T, err error, code string) {
 		t.Fatalf("error code = %q, want %q", *interception.BifrostError.Error.Code, code)
 	}
 }
+
+func stringPtr(value string) *string { return &value }

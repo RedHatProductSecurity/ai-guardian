@@ -14,6 +14,22 @@ not a supported artifact.
 
 See `compatibility.json` for the machine-readable artifact contract.
 
+## Content and credential boundary
+
+The verified LLM hooks inspect normalized content from provider-native and
+OAuth-backed requests without receiving provider credentials. Supported paths
+are chat, text completion, responses, and embedding requests, plus their
+non-streaming responses. The adapter sends only provider/model identifiers and
+the normalized input or output content; request parameters, fallbacks, raw
+request bodies, context headers, passthrough headers, OAuth configuration, and
+provider response headers are excluded. The daemon remains the scanning and
+policy authority.
+
+Native passthrough, MCP transport, OAuth exchange/refresh, and realtime or
+WebSocket traffic are outside the verified content boundary. These paths are
+not given a parallel policy implementation; they require a separately verified
+Bifrost hook contract before being advertised as protected.
+
 Release filenames include the Bifrost and Go versions, for example:
 `ai-guardian-bifrost-v2.6.0-go1.27.4-linux-amd64.so`. Select the asset whose
 Bifrost version, Go toolchain, operating system, and architecture match the
