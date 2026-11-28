@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 
 	"github.com/maximhq/bifrost/core/schemas"
 )
@@ -177,40 +178,50 @@ func marshalRequest(request *schemas.BifrostRequest) (string, error) {
 	if request == nil {
 		return "", errUnsupported
 	}
-	var value any
+	var provider schemas.ModelProvider
+	var model string
+	var content any
 	switch {
 	case request.ChatRequest != nil:
-		value = request.ChatRequest
+		provider, model, content = request.ChatRequest.Provider, request.ChatRequest.Model, request.ChatRequest.Input
 	case request.TextCompletionRequest != nil:
-		value = request.TextCompletionRequest
+		provider, model, content = request.TextCompletionRequest.Provider, request.TextCompletionRequest.Model, request.TextCompletionRequest.Input
 	case request.ResponsesRequest != nil:
-		value = request.ResponsesRequest
+		provider, model, content = request.ResponsesRequest.Provider, request.ResponsesRequest.Model, request.ResponsesRequest.Input
 	case request.EmbeddingRequest != nil:
-		value = request.EmbeddingRequest
+		provider, model, content = request.EmbeddingRequest.Provider, request.EmbeddingRequest.Model, request.EmbeddingRequest.Input
 	default:
 		return "", errUnsupported
 	}
-	return boundedJSON(value)
+	return boundedJSON(safeContentEnvelope{Provider: provider, Model: model, Content: content})
 }
 
 func marshalResponse(response *schemas.BifrostResponse) (string, error) {
 	if response == nil || response.ResponsesStreamResponse != nil || response.SpeechStreamResponse != nil || response.TranscriptionStreamResponse != nil {
 		return "", errUnsupported
 	}
-	var value any
+	var provider schemas.ModelProvider
+	var model string
+	var content any
 	switch {
 	case response.ChatResponse != nil:
-		value = response.ChatResponse
+		provider, model, content = response.ChatResponse.ExtraFields.Provider, response.ChatResponse.Model, response.ChatResponse.Choices
 	case response.TextCompletionResponse != nil:
-		value = response.TextCompletionResponse
+		provider, model, content = response.TextCompletionResponse.ExtraFields.Provider, response.TextCompletionResponse.Model, response.TextCompletionResponse.Choices
 	case response.ResponsesResponse != nil:
-		value = response.ResponsesResponse
+		provider, model, content = response.ResponsesResponse.ExtraFields.Provider, response.ResponsesResponse.Model, response.ResponsesResponse.Output
 	case response.EmbeddingResponse != nil:
-		value = response.EmbeddingResponse
+		provider, model, content = response.EmbeddingResponse.ExtraFields.Provider, response.EmbeddingResponse.Model, response.EmbeddingResponse.Data
 	default:
 		return "", errUnsupported
 	}
-	return boundedJSON(value)
+	return boundedJSON(safeContentEnvelope{Provider: provider, Model: model, Content: content})
+}
+
+type safeContentEnvelope struct {
+	Provider schemas.ModelProvider `json:"provider,omitempty"`
+	Model    string                `json:"model,omitempty"`
+	Content  any                   `json:"content,omitempty"`
 }
 
 func boundedJSON(value any) (string, error) {
@@ -218,7 +229,59 @@ func boundedJSON(value any) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return string(payload), nil
+	var decoded any
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		return "", err
+	}
+	return string(sanitizeJSON(decoded)), nil
+}
+
+// sanitizeJSON removes credential-bearing fields at the daemon boundary. The
+// Bifrost request/response structs intentionally carry content only, but some
+// provider-native and OAuth-backed surfaces expose tokens or headers as JSON
+// fields. The daemon must never receive those values, even when a future
+// schema adds another extension field.
+func sanitizeJSON(value any) []byte {
+	clean := sanitizeJSONValue(value)
+	payload, err := json.Marshal(clean)
+	if err != nil {
+		return []byte("null")
+	}
+	return payload
+}
+
+func sanitizeJSONValue(value any) any {
+	switch typed := value.(type) {
+	case []any:
+		for index := range typed {
+			typed[index] = sanitizeJSONValue(typed[index])
+		}
+		return typed
+	case map[string]any:
+		clean := make(map[string]any, len(typed))
+		for key, item := range typed {
+			if isCredentialField(key) {
+				continue
+			}
+			clean[key] = sanitizeJSONValue(item)
+		}
+		return clean
+	default:
+		return value
+	}
+}
+
+func isCredentialField(key string) bool {
+	normalized := strings.ToLower(strings.NewReplacer("_", "", "-", "", " ", "").Replace(key))
+	switch normalized {
+	case "authorization", "proxyauthorization", "cookie", "setcookie", "headers",
+		"access_token", "accesstoken", "refresh_token", "refreshtoken", "idtoken",
+		"authorizationtoken", "clientsecret", "apikey", "providerapikey", "apisecret", "secretkey",
+		"credential", "credentials", "providerresponseheaders":
+		return true
+	default:
+		return strings.HasSuffix(normalized, "token") || strings.HasSuffix(normalized, "secret")
+	}
 }
 
 func validateVerdict(verdict daemonResponse) error {
