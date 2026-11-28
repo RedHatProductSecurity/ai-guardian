@@ -1,0 +1,139 @@
+name: Bifrost Runtime Contract
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: "1.27.4"
+  BIFROST_VERSION: "2.6.0"
+  BIFROST_REVISION: "172617bb045c6f43d697843c115e64f0155ed143"
+  MODULE_DIR: "go/bifrost-middleware"
+
+jobs:
+  runtime-contract:
+    name: Bifrost runtime contract (canonical Linux amd64)
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Checkout AI Guardian
+        uses: actions/checkout@v7
+
+      - name: Checkout pinned Bifrost source
+        uses: actions/checkout@v7
+        with:
+          repository: maximhq/bifrost
+          ref: ${{ env.BIFROST_REVISION }}
+          path: .bifrost
+          fetch-depth: 1
+
+      - name: Run contract tests in pinned runtime image
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+        run: |
+          docker run --rm \
+            -e GO_VERSION="${GO_VERSION}" \
+            -e BIFROST_VERSION="${BIFROST_VERSION}" \
+            -e BIFROST_REVISION="${BIFROST_REVISION}" \
+            -v "${GITHUB_WORKSPACE}:/workspace" \
+            -v "${RUNNER_TEMP}:/runner-temp" \
+            -w /workspace \
+            "golang:${GO_VERSION}-bookworm" \
+            bash -ceu '
+              set -o pipefail
+              module_dir="${MODULE_DIR:-go/bifrost-middleware}"
+              bifrost_dir="/workspace/.bifrost"
+              workspace="/tmp/bifrost-ai-guardian.work"
+              mapfile -t modules < <(find "$bifrost_dir" -name go.mod -printf "%h\n" | sort)
+              {
+                printf "go %s\n\nuse (\n" "$GO_VERSION"
+                printf "\t%s\n" "${modules[@]}"
+                printf "\t/workspace/%s\n)\n" "$module_dir"
+              } > "$workspace"
+              export GOWORK="$workspace"
+
+              cd "/workspace/$module_dir"
+              test "$(go version | awk "{print \$3}")" = "go${GO_VERSION}"
+              go test -mod=readonly -json ./... | tee /runner-temp/bifrost-runtime-tests.json
+
+              mkdir -p dist /tmp/bifrost-plugin-loader
+              artifact="dist/ai-guardian-bifrost-v${BIFROST_VERSION}-go${GO_VERSION}-linux-amd64.so"
+              CGO_ENABLED=1 GOOS=linux GOARCH=amd64 \
+                go build -mod=readonly -trimpath -buildmode=plugin -o "$artifact" .
+
+              printf '%s\n' \
+                'module bifrost-plugin-loader' \
+                '' \
+                "go ${GO_VERSION}" \
+                '' \
+                'require github.com/maximhq/bifrost/core v1.16.0' \
+                > /tmp/bifrost-plugin-loader/go.mod
+              printf '%s\n' \
+                'package main' \
+                '' \
+                'import (' \
+                '  "fmt"' \
+                '  "os"' \
+                '  "plugin"' \
+                '' \
+                '  _ "github.com/maximhq/bifrost/core/schemas"' \
+                ')' \
+                '' \
+                'func main() {' \
+                '  if len(os.Args) != 2 { panic("usage: plugin-loader plugin.so") }' \
+                '  loaded, err := plugin.Open(os.Args[1])' \
+                '  if err != nil { panic(err) }' \
+                '  name, err := loaded.Lookup("GetName")' \
+                '  if err != nil { panic(err) }' \
+                '  if name.(func() string)() != "ai-guardian-bifrost" { panic("unexpected plugin name") }' \
+                '  fmt.Println("Bifrost runtime plugin load successful")' \
+                '}' \
+                > /tmp/bifrost-plugin-loader/main.go
+              go work use /tmp/bifrost-plugin-loader
+              (cd /tmp/bifrost-plugin-loader && go build -mod=readonly -trimpath -o plugin-loader .)
+              /tmp/bifrost-plugin-loader/plugin-loader "/workspace/$module_dir/$artifact"
+            '
+
+      - name: Publish sanitized runtime summary
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          temp = Path(os.environ["RUNNER_TEMP"])
+          source = temp / "bifrost-runtime-tests.json"
+          summary = {"workflow": "bifrost-runtime-contract", "tests": []}
+          if source.exists():
+              for line in source.read_text().splitlines():
+                  try:
+                      event = json.loads(line)
+                  except json.JSONDecodeError:
+                      continue
+                  if event.get("Action") in {"pass", "fail", "skip"}:
+                      summary["tests"].append({
+                          "package": event.get("Package", ""),
+                          "test": event.get("Test", ""),
+                          "result": event["Action"],
+                      })
+          summary_path = temp / "bifrost-runtime-summary.json"
+          summary_path.write_text(
+              json.dumps(summary, indent=2) + "\n"
+          )
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as output:
+              output.write("## Bifrost runtime contract\n\n")
+              output.write("Canonical Docker image: `golang:${GO_VERSION}-bookworm`\n\n")
+              output.write("Contract tests cover allow, denial, pause, failure modes, streaming, credential isolation, and MCP paths.\n")
+          PY
+          cp "${RUNNER_TEMP}/bifrost-runtime-summary.json" bifrost-runtime-summary.json
+
+      - name: Upload sanitized runtime summary
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bifrost-runtime-contract-summary
+          path: bifrost-runtime-summary.json
+          if-no-files-found: error
