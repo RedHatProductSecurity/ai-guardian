@@ -138,6 +138,109 @@ func TestDaemonFailureCanBeExplicitlyFailOpen(t *testing.T) {
 	}
 }
 
+func TestPreMCPHookSendsOnlyAllowlistedContent(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		var body daemonRequest
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if body.Action != "block" || !strings.Contains(body.Content, "read_file") || !strings.Contains(body.Content, "safe.txt") {
+			t.Fatalf("unexpected MCP content: %s", body.Content)
+		}
+		if strings.Contains(body.Content, "daemon-token") {
+			t.Fatalf("MCP daemon credential leaked into content: %s", body.Content)
+		}
+		_, _ = writer.Write([]byte(`{"clean":true,"blocked":false}`))
+	}))
+	defer server.Close()
+
+	activeClient = &daemonClient{url: server.URL, token: "daemon-token", maxPayload: 4096, httpClient: server.Client()}
+	defer func() { activeClient = nil }()
+	tool := "read_file"
+	arguments := `{"path":"safe.txt"}`
+	request := &schemas.BifrostMCPRequest{
+		RequestType: schemas.MCPRequestTypeChatToolCall,
+		ClientName:  "filesystem",
+		ChatAssistantMessageToolCall: &schemas.ChatAssistantMessageToolCall{
+			Function: schemas.ChatAssistantMessageToolCallFunction{Name: &tool, Arguments: arguments},
+		},
+	}
+	_, shortCircuit, err := PreMCPHook(nil, request)
+	if err != nil || shortCircuit != nil {
+		t.Fatalf("PreMCPHook() = shortCircuit %v, err %v", shortCircuit, err)
+	}
+}
+
+func TestPreMCPHookHonorsExplicitDaemonDenial(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		_, _ = writer.Write([]byte(`{"clean":false,"blocked":true,"reason_code":"secret"}`))
+	}))
+	defer server.Close()
+	activeClient = &daemonClient{url: server.URL, token: "daemon-token", maxPayload: 4096, httpClient: server.Client()}
+	defer func() { activeClient = nil }()
+	tool := "write_file"
+	request := &schemas.BifrostMCPRequest{
+		RequestType: schemas.MCPRequestTypeChatToolCall,
+		ClientName:  "filesystem",
+		ChatAssistantMessageToolCall: &schemas.ChatAssistantMessageToolCall{
+			Function: schemas.ChatAssistantMessageToolCallFunction{Name: &tool, Arguments: `{}`},
+		},
+	}
+	_, shortCircuit, err := PreMCPHook(nil, request)
+	if err != nil || shortCircuit == nil || shortCircuit.Error == nil {
+		t.Fatalf("expected MCP denial, got shortCircuit %v, err %v", shortCircuit, err)
+	}
+	if shortCircuit.Error.AllowFallbacks == nil || *shortCircuit.Error.AllowFallbacks {
+		t.Fatal("MCP security denial must disable fallback")
+	}
+}
+
+func TestPreMCPHookAllowsPausedDaemon(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		_, _ = writer.Write([]byte(`{"clean":true,"blocked":false,"paused":true,"reason_code":"middleware_paused"}`))
+	}))
+	defer server.Close()
+	activeClient = &daemonClient{url: server.URL, token: "daemon-token", maxPayload: 4096, httpClient: server.Client()}
+	defer func() { activeClient = nil }()
+	tool := "read_file"
+	request := &schemas.BifrostMCPRequest{
+		RequestType: schemas.MCPRequestTypeChatToolCall,
+		ClientName:  "filesystem",
+		ChatAssistantMessageToolCall: &schemas.ChatAssistantMessageToolCall{
+			Function: schemas.ChatAssistantMessageToolCallFunction{Name: &tool, Arguments: `{}`},
+		},
+	}
+	_, shortCircuit, err := PreMCPHook(nil, request)
+	if err != nil || shortCircuit != nil {
+		t.Fatalf("paused daemon should allow MCP operation, got %v / %v", shortCircuit, err)
+	}
+}
+
+func TestPostMCPHookInspectsToolResult(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		var body daemonRequest
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(body.Content, "tool result") {
+			t.Fatalf("tool result was not sent for inspection: %s", body.Content)
+		}
+		_, _ = writer.Write([]byte(`{"clean":false,"blocked":true}`))
+	}))
+	defer server.Close()
+	activeClient = &daemonClient{url: server.URL, token: "daemon-token", maxPayload: 4096, httpClient: server.Client()}
+	defer func() { activeClient = nil }()
+	result := "tool result"
+	response := &schemas.BifrostMCPResponse{
+		ChatMessage: &schemas.ChatMessage{Content: &schemas.ChatMessageContent{ContentStr: &result}},
+		ExtraFields: schemas.BifrostMCPResponseExtraFields{MCPRequestType: schemas.MCPRequestTypeChatToolCall, ClientName: "filesystem", ToolName: "read_file"},
+	}
+	_, bifrostErr, err := PostMCPHook(nil, response, nil)
+	if err != nil || bifrostErr == nil {
+		t.Fatalf("expected MCP result denial, got %v / %v", bifrostErr, err)
+	}
+}
+
 func TestHTTPTransportStreamChunkHookBlocksBeforeDelivery(t *testing.T) {
 	chunk := &schemas.BifrostStreamChunk{
 		BifrostChatResponse: &schemas.BifrostChatResponse{Object: "chat.completion.chunk"},

@@ -14,7 +14,7 @@ def test_bifrost_metadata_pins_qualified_build_inputs():
     assert metadata["bifrost"] == {
         "version": "2.6.0",
         "revision": "172617bb045c6f43d697843c115e64f0155ed143",
-        "hook_contract": "PreLLMHook/PostLLMHook/HTTPTransportStreamChunkHook",
+        "hook_contract": "PreLLMHook/PostLLMHook/PreMCPHook/PostMCPHook/HTTPTransportStreamChunkHook",
         "build_mode": "dynamic-plugin",
     }
     assert metadata["toolchain"]["go"] == "1.27.4"

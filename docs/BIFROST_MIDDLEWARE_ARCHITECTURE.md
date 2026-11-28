@@ -344,7 +344,7 @@ bounded byte counts, decision, reason code, and audit-safe finding summaries.
 | Streaming response | transport chunk/header hooks | Bifrost pause/resume gate buffers chunks until the bounded assembled response is inspected; denied buffers are cleared before termination | Supported with bounded end-of-stream inspection; delivery begins after the final decision |
 | Native realtime/WebSocket | setup/session hooks | No verified v2.6.0 frame hook; HTTP setup alone does not cover frames | Unsupported; fail closed until adapter/harness proof |
 | ChatGPT OAuth passthrough | transport/auth path | Unverified; must prove credentials are never sent to daemon and content still reaches gate | Defer |
-| Gateway MCP operations | `PreMCPHook` / `PostMCPHook` | Separate surface; requires explicit tool/argument/result policy mapping | Defer |
+| Gateway MCP operations | `PreMCPHook` / `PostMCPHook` | Generic request/result hooks provide bounded allowlisted content; connect/auth paths remain outside the seam | Yes for generic hooks; connect/auth unsupported |
 | Provider retry/fallback | per-attempt `PreLLMHook` | Must be tested as a security invariant | Yes |
 
 Coverage labels mean: **Supported** is source and harness verified;
@@ -422,7 +422,8 @@ Bifrost and the Broker are optional. Installing or removing the plugin must not
   before termination.
 - Qualify native realtime/WebSocket session and frame hooks.
 - Qualify OAuth passthrough and provider-native passthrough surfaces.
-- Define gateway MCP request/result policy mapping.
+- Qualify MCP connection setup, OAuth credential exchange, and provider-native
+  passthrough paths that bypass the generic `PreMCPHook`/`PostMCPHook` surface.
 - Add a shared, versioned middleware contract only if OpenShell and Bifrost
   implementations demonstrate a stable common semantic need. Do not refactor
   OpenShell as part of #2861.

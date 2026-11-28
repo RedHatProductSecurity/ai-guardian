@@ -136,6 +136,23 @@ Until a Bifrost-native adapter and harness prove these boundaries, deployments
 must treat native realtime/WebSocket traffic as outside the middleware
 protection boundary.
 
+## MCP enforcement boundary
+
+The plugin implements Bifrost's `PreMCPHook` and `PostMCPHook` for the generic
+MCP request/response pipeline. Tool calls, prompt reads, resource reads,
+completion requests, and list/ping envelopes are sent to the daemon as bounded,
+allowlisted JSON containing only operation metadata and content. Transport
+headers, cookies, authorization values, provider credentials, and raw error
+messages are never forwarded. Explicit daemon denials are terminal MCP
+security errors; daemon pause responses are treated as authoritative pass-through
+decisions, while unavailable or malformed responses follow the configured
+failure policy.
+
+MCP connection setup, OAuth credential exchange, provider-native passthrough,
+and any MCP path that bypasses the generic hooks are unsupported. The plugin
+does not claim coverage for those operations and fails closed when an unknown
+MCP operation reaches the generic hook surface.
+
 ## Repository layout
 
 ```text
