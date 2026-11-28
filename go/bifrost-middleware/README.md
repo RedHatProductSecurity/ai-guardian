@@ -99,6 +99,27 @@ deployment-specific. A plugin load failure must not be interpreted as gateway
 traffic protection; verify the loaded plugin status and run the middleware
 integration checks before relying on it.
 
+## Realtime and WebSocket boundary
+
+Native Bifrost realtime/WebSocket interception is **unsupported in v2.6.0**.
+The verified plugin contract exposes `PreLLMHook` and `PostLLMHook`, but this
+repository does not have a verified Bifrost hook that observes the upgrade and
+every complete frame. The plugin must not advertise WebSocket protection based
+on the HTTP setup hook alone.
+
+`websocket.go` contains the bounded enforcement contract for a future native
+adapter. It requires a pre-upgrade decision, complete text frames, ordered
+per-session checks, a 256-message limit, the configured payload limit, and a
+five-minute idle expiry. Query data is removed before the target is sent to the
+daemon. Binary frames, malformed targets, expired or cancelled sessions,
+invalid verdicts, daemon failures, and explicit denials terminate the session
+before delivery. A future adapter must apply an allowed decision before writing
+the frame; this evaluator never forwards socket data itself.
+
+Until a Bifrost-native adapter and harness prove these boundaries, deployments
+must treat native realtime/WebSocket traffic as outside the middleware
+protection boundary.
+
 ## Repository layout
 
 ```text
