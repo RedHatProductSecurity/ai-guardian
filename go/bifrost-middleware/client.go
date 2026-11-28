@@ -37,6 +37,7 @@ type daemonRequest struct {
 type daemonResponse struct {
 	Clean    bool            `json:"clean"`
 	Blocked  bool            `json:"blocked"`
+	Paused   bool            `json:"paused"`
 	Redacted string          `json:"redacted"`
 	Reason   string          `json:"reason_code"`
 	Message  string          `json:"message"`

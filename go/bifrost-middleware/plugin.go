@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/maximhq/bifrost/core/schemas"
@@ -94,6 +95,162 @@ func PostLLMHook(_ *schemas.BifrostContext, response *schemas.BifrostResponse, b
 		return response, denyError("ai_guardian_denied", "AI Guardian denied the response"), nil
 	}
 	return response, nil, nil
+}
+
+// PreMCPHook is the daemon-authoritative gate for MCP request content. The
+// envelope contains only operation metadata and tool/prompt/resource content;
+// MCP transport headers and credentials never enter the daemon payload.
+func PreMCPHook(_ *schemas.BifrostContext, request *schemas.BifrostMCPRequest) (*schemas.BifrostMCPRequest, *schemas.MCPPluginShortCircuit, error) {
+	client, err := currentClient()
+	if err != nil {
+		return request, denyMCPShortCircuit("ai_guardian_unavailable", "AI Guardian daemon unavailable"), nil
+	}
+	content, err := marshalMCPRequest(request)
+	if err != nil {
+		return request, denyMCPShortCircuit("ai_guardian_request_error", err.Error()), nil
+	}
+	verdict, err := client.check(content)
+	if err != nil {
+		if !client.failClosed {
+			return request, nil, nil
+		}
+		return request, denyMCPShortCircuit("ai_guardian_unavailable", "AI Guardian daemon unavailable"), nil
+	}
+	if err := validateVerdict(verdict); err != nil {
+		if !client.failClosed {
+			return request, nil, nil
+		}
+		return request, denyMCPShortCircuit("ai_guardian_invalid_verdict", err.Error()), nil
+	}
+	if verdict.Blocked {
+		return request, denyMCPShortCircuit("ai_guardian_denied", "AI Guardian denied the MCP operation"), nil
+	}
+	return request, nil, nil
+}
+
+// PostMCPHook inspects the bounded MCP result before Bifrost returns it to the
+// caller. Existing MCP errors are preserved, but only their stable error code
+// is sent for inspection, never an error message that may contain credentials.
+func PostMCPHook(_ *schemas.BifrostContext, response *schemas.BifrostMCPResponse, bifrostErr *schemas.BifrostError) (*schemas.BifrostMCPResponse, *schemas.BifrostError, error) {
+	client, err := currentClient()
+	if err != nil {
+		return response, denyError("ai_guardian_unavailable", "AI Guardian daemon unavailable"), nil
+	}
+	content, err := marshalMCPResponse(response, bifrostErr)
+	if err != nil {
+		return response, denyError("ai_guardian_response_error", err.Error()), nil
+	}
+	verdict, err := client.check(content)
+	if err != nil {
+		if !client.failClosed {
+			return response, bifrostErr, nil
+		}
+		return response, denyError("ai_guardian_unavailable", "AI Guardian daemon unavailable"), nil
+	}
+	if err := validateVerdict(verdict); err != nil {
+		if !client.failClosed {
+			return response, bifrostErr, nil
+		}
+		return response, denyError("ai_guardian_invalid_verdict", err.Error()), nil
+	}
+	if verdict.Blocked || verdict.Redacted != "" {
+		return response, denyError("ai_guardian_denied", "AI Guardian denied the MCP result"), nil
+	}
+	return response, bifrostErr, nil
+}
+
+type mcpEnvelope struct {
+	Kind      string `json:"kind"`
+	Operation string `json:"operation"`
+	Client    string `json:"client,omitempty"`
+	Tool      string `json:"tool,omitempty"`
+	Target    string `json:"target,omitempty"`
+	Arguments any    `json:"arguments,omitempty"`
+	Result    any    `json:"result,omitempty"`
+	ErrorCode string `json:"error_code,omitempty"`
+}
+
+func marshalMCPRequest(request *schemas.BifrostMCPRequest) (string, error) {
+	if request == nil || request.RequestType == "" {
+		return "", errUnsupported
+	}
+	envelope := mcpEnvelope{Kind: "mcp_request", Operation: string(request.RequestType), Client: request.ClientName}
+	switch {
+	case request.RequestType.IsExecuteTool():
+		envelope.Tool = request.GetToolName()
+		envelope.Arguments = request.GetToolArguments()
+	case request.BifrostMCPGetPromptRequest != nil:
+		envelope.Target = request.BifrostMCPGetPromptRequest.Name
+		envelope.Arguments = request.BifrostMCPGetPromptRequest.Arguments
+	case request.BifrostMCPReadResourceRequest != nil:
+		envelope.Target = request.BifrostMCPReadResourceRequest.URI
+	case request.BifrostMCPCompleteRequest != nil:
+		envelope.Arguments = request.BifrostMCPCompleteRequest.Params
+	case request.RequestType != schemas.MCPRequestTypePing &&
+		request.RequestType != schemas.MCPRequestTypeListTools &&
+		request.RequestType != schemas.MCPRequestTypeListResources &&
+		request.RequestType != schemas.MCPRequestTypeListResourceTemplates &&
+		request.RequestType != schemas.MCPRequestTypeListPrompts:
+		return "", fmt.Errorf("unsupported MCP operation: %s", request.RequestType)
+	}
+	return boundedJSON(envelope)
+}
+
+func marshalMCPResponse(response *schemas.BifrostMCPResponse, bifrostErr *schemas.BifrostError) (string, error) {
+	if response == nil && bifrostErr == nil {
+		return "", errUnsupported
+	}
+	envelope := mcpEnvelope{Kind: "mcp_response"}
+	if bifrostErr != nil {
+		envelope.Operation = string(bifrostErr.ExtraFields.MCPRequestType)
+		envelope.Client = bifrostErr.ExtraFields.MCPClientName
+		envelope.Tool = bifrostErr.ExtraFields.MCPToolName
+	}
+	if response != nil {
+		if envelope.Operation == "" {
+			envelope.Operation = string(response.ExtraFields.MCPRequestType)
+		}
+		if envelope.Client == "" {
+			envelope.Client = response.ExtraFields.ClientName
+		}
+		if envelope.Tool == "" {
+			envelope.Tool = response.ExtraFields.ToolName
+		}
+		switch {
+		case response.ChatMessage != nil:
+			envelope.Result = response.ChatMessage.Content
+		case response.ResponsesMessage != nil:
+			envelope.Result = response.ResponsesMessage
+		case response.BifrostMCPGetPromptResponse != nil:
+			envelope.Result = response.BifrostMCPGetPromptResponse.Prompt
+		case response.BifrostMCPReadResourceResponse != nil:
+			envelope.Result = response.BifrostMCPReadResourceResponse.Resource
+		case response.BifrostMCPCompleteResponse != nil:
+			envelope.Result = response.BifrostMCPCompleteResponse.Completion
+		case response.BifrostMCPListToolsResponse != nil:
+			envelope.Result = response.BifrostMCPListToolsResponse.Tools
+		case response.BifrostMCPListResourcesResponse != nil:
+			envelope.Result = response.BifrostMCPListResourcesResponse.Resources
+		case response.BifrostMCPListResourceTemplatesResponse != nil:
+			envelope.Result = response.BifrostMCPListResourceTemplatesResponse.ResourceTemplates
+		case response.BifrostMCPListPromptsResponse != nil:
+			envelope.Result = response.BifrostMCPListPromptsResponse.Prompts
+		}
+	}
+	if bifrostErr != nil {
+		envelope.ErrorCode = bifrostErr.ExtraFields.MCPToolName
+		if envelope.ErrorCode == "" && bifrostErr.Error != nil && bifrostErr.Error.Code != nil {
+			envelope.ErrorCode = *bifrostErr.Error.Code
+		}
+	}
+	if envelope.Operation == "" {
+		return "", errUnsupported
+	}
+	return boundedJSON(envelope)
+}
+
+func denyMCPShortCircuit(code, message string) *schemas.MCPPluginShortCircuit {
+	return &schemas.MCPPluginShortCircuit{Error: denyError(code, message)}
 }
 
 // HTTPTransportStreamChunkHook holds chunks in Bifrost's pause/resume gate and
