@@ -3291,6 +3291,7 @@ def test_release_readiness_job_names_describe_all_checked_scopes():
         "install-script": "POSIX Install Tests (Linux/macOS, Python ${{ matrix.python-version }})",
         "mcp-server": "MCP Initialize & Read-Only Tool JSON-RPC Calls",
         "openshell-middleware-runtime": "OpenShell Middleware Compatibility & Runtime Tests",
+        "bifrost-runtime-contract": "Bifrost Runtime Contract",
     }
     assert {
         job_id: job["name"] for job_id, job in workflow["jobs"].items()
